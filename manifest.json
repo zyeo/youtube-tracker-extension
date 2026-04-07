@@ -1,5 +1,36 @@
 {
-    "manifest_version": 3,
-    "name": "YouTube Tracker",
-    "version": "1.0"
-  }
+  "manifest_version": 3,
+  "name": "YouTube Tracker",
+  "version": "1.0",
+  "description": "Minimal YouTube usage tracker (initial slice).",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://www.youtube.com/*",
+    "*://m.youtube.com/*",
+    "*://youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "YouTube Tracker"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
