@@ -1,14 +1,9 @@
 // background.js - YouTube Tracker (Manifest V3 service worker)
 // Listens for tab updates/activation and logs basic info for YouTube URLs.
 
-// Storage keys for the first real metric.
+// Storage keys for daily history.
 const STORAGE_KEYS = {
-  count: "youtubeOpenCount",
-  time: "activeYouTubeTimeMs",
-  shortsTime: "shortsFocusedTimeMs",
-  watchTime: "watchFocusedTimeMs",
-  browseTime: "browseFocusedTimeMs",
-  date: "youtubeOpenDate"
+  dailyStats: "dailyStats"
 };
 
 /**
@@ -99,18 +94,54 @@ function logYouTubeTab(tab) {
 }
 
 /**
- * Increment youtubeOpenCount for "today", automatically resetting on day change.
- * This is the first real metric: "YouTube opens today".
+ * Get today's stats entry from the daily history, creating it if needed.
+ * Shape in storage:
+ * {
+ *   dailyStats: {
+ *     "YYYY-MM-DD": {
+ *       youtubeOpenCount,
+ *       activeYouTubeTimeMs,
+ *       shortsFocusedTimeMs,
+ *       watchFocusedTimeMs,
+ *       browseFocusedTimeMs
+ *     }
+ *   }
+ * }
+ */
+async function getOrInitTodayStats() {
+  const today = getTodayDateString();
+  const stored = await storageGet([STORAGE_KEYS.dailyStats]);
+  const dailyStats = stored[STORAGE_KEYS.dailyStats] || {};
+
+  const emptyStats = {
+    youtubeOpenCount: 0,
+    activeYouTubeTimeMs: 0,
+    shortsFocusedTimeMs: 0,
+    watchFocusedTimeMs: 0,
+    browseFocusedTimeMs: 0
+  };
+
+  const todayStats = {
+    ...emptyStats,
+    ...(dailyStats[today] || {})
+  };
+
+  dailyStats[today] = todayStats;
+
+  return { today, dailyStats, todayStats };
+}
+
+/**
+ * Increment youtubeOpenCount for today in the dailyStats history.
  * @param {{url: string, pageType: string, reason: string}} details
  */
 async function incrementYouTubeOpensToday(details) {
-  const { today, youtubeOpenCount } = await ensureTodayDailyMetrics();
-  const nextCount = youtubeOpenCount + 1;
+  const { today, dailyStats, todayStats } = await getOrInitTodayStats();
+  const nextCount = todayStats.youtubeOpenCount + 1;
+  todayStats.youtubeOpenCount = nextCount;
+  dailyStats[today] = todayStats;
 
-  await storageSet({
-    [STORAGE_KEYS.date]: today,
-    [STORAGE_KEYS.count]: nextCount
-  });
+  await storageSet({ [STORAGE_KEYS.dailyStats]: dailyStats });
 
   console.log("[YouTube Tracker] Counted a YouTube open.", {
     today,
@@ -119,74 +150,6 @@ async function incrementYouTubeOpensToday(details) {
     url: details.url,
     pageType: details.pageType
   });
-}
-
-/**
- * Ensure the stored "daily metrics" keys match today's date.
- * If not, reset both:
- * - youtubeOpenCount
- * - activeYouTubeTimeMs
- * - shortsFocusedTimeMs
- * - watchFocusedTimeMs
- * - browseFocusedTimeMs
- *
- * @returns {Promise<{
- *   today: string,
- *   youtubeOpenCount: number,
- *   activeYouTubeTimeMs: number,
- *   shortsFocusedTimeMs: number,
- *   watchFocusedTimeMs: number,
- *   browseFocusedTimeMs: number
- * }>}
- */
-async function ensureTodayDailyMetrics() {
-  const today = getTodayDateString();
-  const stored = await storageGet([
-    STORAGE_KEYS.count,
-    STORAGE_KEYS.time,
-    STORAGE_KEYS.shortsTime,
-    STORAGE_KEYS.watchTime,
-    STORAGE_KEYS.browseTime,
-    STORAGE_KEYS.date
-  ]);
-
-  const storedDate = stored[STORAGE_KEYS.date];
-  let youtubeOpenCount = Number(stored[STORAGE_KEYS.count] ?? 0);
-  let activeYouTubeTimeMs = Number(stored[STORAGE_KEYS.time] ?? 0);
-  let shortsFocusedTimeMs = Number(stored[STORAGE_KEYS.shortsTime] ?? 0);
-  let watchFocusedTimeMs = Number(stored[STORAGE_KEYS.watchTime] ?? 0);
-  let browseFocusedTimeMs = Number(stored[STORAGE_KEYS.browseTime] ?? 0);
-
-  // If the stored date isn't today, reset for the new day.
-  if (storedDate !== today) {
-    console.log("[YouTube Tracker] New day detected. Resetting metrics.", {
-      storedDate,
-      today
-    });
-    youtubeOpenCount = 0;
-    activeYouTubeTimeMs = 0;
-    shortsFocusedTimeMs = 0;
-    watchFocusedTimeMs = 0;
-    browseFocusedTimeMs = 0;
-
-    await storageSet({
-      [STORAGE_KEYS.date]: today,
-      [STORAGE_KEYS.count]: youtubeOpenCount,
-      [STORAGE_KEYS.time]: activeYouTubeTimeMs,
-      [STORAGE_KEYS.shortsTime]: shortsFocusedTimeMs,
-      [STORAGE_KEYS.watchTime]: watchFocusedTimeMs,
-      [STORAGE_KEYS.browseTime]: browseFocusedTimeMs
-    });
-  }
-
-  return {
-    today,
-    youtubeOpenCount,
-    activeYouTubeTimeMs,
-    shortsFocusedTimeMs,
-    watchFocusedTimeMs,
-    browseFocusedTimeMs
-  };
 }
 
 // --- State tracking to enforce counting rules ---
@@ -293,11 +256,11 @@ function tabsQueryActiveInWindow(windowId) {
 }
 
 async function incrementActiveYouTubeTimeMsBy1000({ url, pageType, shouldLog }) {
-  const metrics = await ensureTodayDailyMetrics();
-  const nextActiveYouTubeTimeMs = metrics.activeYouTubeTimeMs + 1000;
-  let nextShortsFocusedTimeMs = metrics.shortsFocusedTimeMs;
-  let nextWatchFocusedTimeMs = metrics.watchFocusedTimeMs;
-  let nextBrowseFocusedTimeMs = metrics.browseFocusedTimeMs;
+  const { today, dailyStats, todayStats } = await getOrInitTodayStats();
+  const nextActiveYouTubeTimeMs = todayStats.activeYouTubeTimeMs + 1000;
+  let nextShortsFocusedTimeMs = todayStats.shortsFocusedTimeMs;
+  let nextWatchFocusedTimeMs = todayStats.watchFocusedTimeMs;
+  let nextBrowseFocusedTimeMs = todayStats.browseFocusedTimeMs;
 
   // Increment exactly one page-type bucket per counted second.
   if (pageType === "shorts") {
@@ -308,13 +271,13 @@ async function incrementActiveYouTubeTimeMsBy1000({ url, pageType, shouldLog }) 
     nextBrowseFocusedTimeMs += 1000;
   }
 
-  await storageSet({
-    [STORAGE_KEYS.date]: metrics.today,
-    [STORAGE_KEYS.time]: nextActiveYouTubeTimeMs,
-    [STORAGE_KEYS.shortsTime]: nextShortsFocusedTimeMs,
-    [STORAGE_KEYS.watchTime]: nextWatchFocusedTimeMs,
-    [STORAGE_KEYS.browseTime]: nextBrowseFocusedTimeMs
-  });
+  todayStats.activeYouTubeTimeMs = nextActiveYouTubeTimeMs;
+  todayStats.shortsFocusedTimeMs = nextShortsFocusedTimeMs;
+  todayStats.watchFocusedTimeMs = nextWatchFocusedTimeMs;
+  todayStats.browseFocusedTimeMs = nextBrowseFocusedTimeMs;
+  dailyStats[today] = todayStats;
+
+  await storageSet({ [STORAGE_KEYS.dailyStats]: dailyStats });
 
   if (shouldLog) {
     const incrementedBucket =
@@ -325,7 +288,7 @@ async function incrementActiveYouTubeTimeMsBy1000({ url, pageType, shouldLog }) 
           : STORAGE_KEYS.browseTime;
 
     console.log("[YouTube Tracker] Added active YouTube time.", {
-      today: metrics.today,
+      today,
       addedMs: 1000,
       pageType,
       incrementedBucket,

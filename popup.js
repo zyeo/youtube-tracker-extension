@@ -9,14 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const shortsTimeEl = document.getElementById("shortsTime");
   const watchTimeEl = document.getElementById("watchTime");
   const browseTimeEl = document.getElementById("browseTime");
+  const openDashboardBtn = document.getElementById("openDashboard");
 
   const STORAGE_KEYS = {
-    count: "youtubeOpenCount",
-    time: "activeYouTubeTimeMs",
-    shortsTime: "shortsFocusedTimeMs",
-    watchTime: "watchFocusedTimeMs",
-    browseTime: "browseFocusedTimeMs",
-    date: "youtubeOpenDate"
+    dailyStats: "dailyStats"
   };
 
   function getTodayDateString() {
@@ -46,21 +42,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${hh}:${mm}:${ss}`;
   }
 
-  function updateMetricsDisplay({
-    storedCount,
-    storedTime,
-    storedShortsTime,
-    storedWatchTime,
-    storedBrowseTime,
-    storedDate
-  }) {
+  function updateMetricsDisplay(dailyStatsObj) {
     const today = getTodayDateString();
-    const isToday = storedDate === today;
-    const youtubeOpenCount = isToday ? Number(storedCount ?? 0) : 0;
-    const focusedYouTubeTimeMs = isToday ? Number(storedTime ?? 0) : 0;
-    const shortsFocusedTimeMs = isToday ? Number(storedShortsTime ?? 0) : 0;
-    const watchFocusedTimeMs = isToday ? Number(storedWatchTime ?? 0) : 0;
-    const browseFocusedTimeMs = isToday ? Number(storedBrowseTime ?? 0) : 0;
+    const todayStats = (dailyStatsObj && dailyStatsObj[today]) || {};
+
+    const youtubeOpenCount = Number(todayStats.youtubeOpenCount ?? 0);
+    const focusedYouTubeTimeMs = Number(todayStats.activeYouTubeTimeMs ?? 0);
+    const shortsFocusedTimeMs = Number(todayStats.shortsFocusedTimeMs ?? 0);
+    const watchFocusedTimeMs = Number(todayStats.watchFocusedTimeMs ?? 0);
+    const browseFocusedTimeMs = Number(todayStats.browseFocusedTimeMs ?? 0);
 
     openCountEl.textContent = String(
       Number.isFinite(youtubeOpenCount) ? youtubeOpenCount : 0
@@ -73,23 +63,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function readAndRender() {
     chrome.storage.local.get(
-      [
-        STORAGE_KEYS.count,
-        STORAGE_KEYS.time,
-        STORAGE_KEYS.shortsTime,
-        STORAGE_KEYS.watchTime,
-        STORAGE_KEYS.browseTime,
-        STORAGE_KEYS.date
-      ],
+      [STORAGE_KEYS.dailyStats],
       (data) => {
-        updateMetricsDisplay({
-          storedCount: data[STORAGE_KEYS.count],
-          storedTime: data[STORAGE_KEYS.time],
-          storedShortsTime: data[STORAGE_KEYS.shortsTime],
-          storedWatchTime: data[STORAGE_KEYS.watchTime],
-          storedBrowseTime: data[STORAGE_KEYS.browseTime],
-          storedDate: data[STORAGE_KEYS.date]
-        });
+        updateMetricsDisplay(data[STORAGE_KEYS.dailyStats]);
       }
     );
   }
@@ -101,15 +77,16 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
     const changedKeys = Object.keys(changes || {});
-    const relevant =
-      changedKeys.includes(STORAGE_KEYS.count) ||
-      changedKeys.includes(STORAGE_KEYS.time) ||
-      changedKeys.includes(STORAGE_KEYS.shortsTime) ||
-      changedKeys.includes(STORAGE_KEYS.watchTime) ||
-      changedKeys.includes(STORAGE_KEYS.browseTime) ||
-      changedKeys.includes(STORAGE_KEYS.date);
-
-    if (relevant) readAndRender();
+    if (changedKeys.includes(STORAGE_KEYS.dailyStats)) {
+      readAndRender();
+    }
   });
+
+  if (openDashboardBtn) {
+    openDashboardBtn.addEventListener("click", () => {
+      const url = chrome.runtime.getURL("dashboard.html");
+      chrome.tabs.create({ url });
+    });
+  }
 });
 

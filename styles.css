@@ -46,3 +46,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.popup-button {
+  margin-top: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #2563eb;
+  color: #f9fafb;
+}
+
+.popup-button:hover {
+  background: #1d4ed8;
+}
+
