@@ -5,11 +5,17 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("[YouTube Tracker] Popup loaded.");
 
   const openCountEl = document.getElementById("openCount");
-  const activeTimeEl = document.getElementById("activeTime");
+  const focusedTimeEl = document.getElementById("focusedTime");
+  const shortsTimeEl = document.getElementById("shortsTime");
+  const watchTimeEl = document.getElementById("watchTime");
+  const browseTimeEl = document.getElementById("browseTime");
 
   const STORAGE_KEYS = {
     count: "youtubeOpenCount",
     time: "activeYouTubeTimeMs",
+    shortsTime: "shortsFocusedTimeMs",
+    watchTime: "watchFocusedTimeMs",
+    browseTime: "browseFocusedTimeMs",
     date: "youtubeOpenDate"
   };
 
@@ -40,25 +46,48 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${hh}:${mm}:${ss}`;
   }
 
-  function updateMetricsDisplay({ storedCount, storedTime, storedDate }) {
+  function updateMetricsDisplay({
+    storedCount,
+    storedTime,
+    storedShortsTime,
+    storedWatchTime,
+    storedBrowseTime,
+    storedDate
+  }) {
     const today = getTodayDateString();
     const isToday = storedDate === today;
     const youtubeOpenCount = isToday ? Number(storedCount ?? 0) : 0;
-    const activeYouTubeTimeMs = isToday ? Number(storedTime ?? 0) : 0;
+    const focusedYouTubeTimeMs = isToday ? Number(storedTime ?? 0) : 0;
+    const shortsFocusedTimeMs = isToday ? Number(storedShortsTime ?? 0) : 0;
+    const watchFocusedTimeMs = isToday ? Number(storedWatchTime ?? 0) : 0;
+    const browseFocusedTimeMs = isToday ? Number(storedBrowseTime ?? 0) : 0;
 
     openCountEl.textContent = String(
       Number.isFinite(youtubeOpenCount) ? youtubeOpenCount : 0
     );
-    activeTimeEl.textContent = formatMsAsClock(activeYouTubeTimeMs);
+    focusedTimeEl.textContent = formatMsAsClock(focusedYouTubeTimeMs);
+    shortsTimeEl.textContent = formatMsAsClock(shortsFocusedTimeMs);
+    watchTimeEl.textContent = formatMsAsClock(watchFocusedTimeMs);
+    browseTimeEl.textContent = formatMsAsClock(browseFocusedTimeMs);
   }
 
   function readAndRender() {
     chrome.storage.local.get(
-      [STORAGE_KEYS.count, STORAGE_KEYS.time, STORAGE_KEYS.date],
+      [
+        STORAGE_KEYS.count,
+        STORAGE_KEYS.time,
+        STORAGE_KEYS.shortsTime,
+        STORAGE_KEYS.watchTime,
+        STORAGE_KEYS.browseTime,
+        STORAGE_KEYS.date
+      ],
       (data) => {
         updateMetricsDisplay({
           storedCount: data[STORAGE_KEYS.count],
           storedTime: data[STORAGE_KEYS.time],
+          storedShortsTime: data[STORAGE_KEYS.shortsTime],
+          storedWatchTime: data[STORAGE_KEYS.watchTime],
+          storedBrowseTime: data[STORAGE_KEYS.browseTime],
           storedDate: data[STORAGE_KEYS.date]
         });
       }
@@ -75,6 +104,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const relevant =
       changedKeys.includes(STORAGE_KEYS.count) ||
       changedKeys.includes(STORAGE_KEYS.time) ||
+      changedKeys.includes(STORAGE_KEYS.shortsTime) ||
+      changedKeys.includes(STORAGE_KEYS.watchTime) ||
+      changedKeys.includes(STORAGE_KEYS.browseTime) ||
       changedKeys.includes(STORAGE_KEYS.date);
 
     if (relevant) readAndRender();

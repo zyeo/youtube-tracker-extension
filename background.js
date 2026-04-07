@@ -5,6 +5,9 @@
 const STORAGE_KEYS = {
   count: "youtubeOpenCount",
   time: "activeYouTubeTimeMs",
+  shortsTime: "shortsFocusedTimeMs",
+  watchTime: "watchFocusedTimeMs",
+  browseTime: "browseFocusedTimeMs",
   date: "youtubeOpenDate"
 };
 
@@ -123,20 +126,36 @@ async function incrementYouTubeOpensToday(details) {
  * If not, reset both:
  * - youtubeOpenCount
  * - activeYouTubeTimeMs
+ * - shortsFocusedTimeMs
+ * - watchFocusedTimeMs
+ * - browseFocusedTimeMs
  *
- * @returns {Promise<{today: string, youtubeOpenCount: number, activeYouTubeTimeMs: number}>}
+ * @returns {Promise<{
+ *   today: string,
+ *   youtubeOpenCount: number,
+ *   activeYouTubeTimeMs: number,
+ *   shortsFocusedTimeMs: number,
+ *   watchFocusedTimeMs: number,
+ *   browseFocusedTimeMs: number
+ * }>}
  */
 async function ensureTodayDailyMetrics() {
   const today = getTodayDateString();
   const stored = await storageGet([
     STORAGE_KEYS.count,
     STORAGE_KEYS.time,
+    STORAGE_KEYS.shortsTime,
+    STORAGE_KEYS.watchTime,
+    STORAGE_KEYS.browseTime,
     STORAGE_KEYS.date
   ]);
 
   const storedDate = stored[STORAGE_KEYS.date];
   let youtubeOpenCount = Number(stored[STORAGE_KEYS.count] ?? 0);
   let activeYouTubeTimeMs = Number(stored[STORAGE_KEYS.time] ?? 0);
+  let shortsFocusedTimeMs = Number(stored[STORAGE_KEYS.shortsTime] ?? 0);
+  let watchFocusedTimeMs = Number(stored[STORAGE_KEYS.watchTime] ?? 0);
+  let browseFocusedTimeMs = Number(stored[STORAGE_KEYS.browseTime] ?? 0);
 
   // If the stored date isn't today, reset for the new day.
   if (storedDate !== today) {
@@ -146,15 +165,28 @@ async function ensureTodayDailyMetrics() {
     });
     youtubeOpenCount = 0;
     activeYouTubeTimeMs = 0;
+    shortsFocusedTimeMs = 0;
+    watchFocusedTimeMs = 0;
+    browseFocusedTimeMs = 0;
 
     await storageSet({
       [STORAGE_KEYS.date]: today,
       [STORAGE_KEYS.count]: youtubeOpenCount,
-      [STORAGE_KEYS.time]: activeYouTubeTimeMs
+      [STORAGE_KEYS.time]: activeYouTubeTimeMs,
+      [STORAGE_KEYS.shortsTime]: shortsFocusedTimeMs,
+      [STORAGE_KEYS.watchTime]: watchFocusedTimeMs,
+      [STORAGE_KEYS.browseTime]: browseFocusedTimeMs
     });
   }
 
-  return { today, youtubeOpenCount, activeYouTubeTimeMs };
+  return {
+    today,
+    youtubeOpenCount,
+    activeYouTubeTimeMs,
+    shortsFocusedTimeMs,
+    watchFocusedTimeMs,
+    browseFocusedTimeMs
+  };
 }
 
 // --- State tracking to enforce counting rules ---
@@ -261,21 +293,50 @@ function tabsQueryActiveInWindow(windowId) {
 }
 
 async function incrementActiveYouTubeTimeMsBy1000({ url, pageType, shouldLog }) {
-  const { today, activeYouTubeTimeMs } = await ensureTodayDailyMetrics();
-  const next = activeYouTubeTimeMs + 1000;
+  const metrics = await ensureTodayDailyMetrics();
+  const nextActiveYouTubeTimeMs = metrics.activeYouTubeTimeMs + 1000;
+  let nextShortsFocusedTimeMs = metrics.shortsFocusedTimeMs;
+  let nextWatchFocusedTimeMs = metrics.watchFocusedTimeMs;
+  let nextBrowseFocusedTimeMs = metrics.browseFocusedTimeMs;
+
+  // Increment exactly one page-type bucket per counted second.
+  if (pageType === "shorts") {
+    nextShortsFocusedTimeMs += 1000;
+  } else if (pageType === "watch") {
+    nextWatchFocusedTimeMs += 1000;
+  } else {
+    nextBrowseFocusedTimeMs += 1000;
+  }
 
   await storageSet({
-    [STORAGE_KEYS.date]: today,
-    [STORAGE_KEYS.time]: next
+    [STORAGE_KEYS.date]: metrics.today,
+    [STORAGE_KEYS.time]: nextActiveYouTubeTimeMs,
+    [STORAGE_KEYS.shortsTime]: nextShortsFocusedTimeMs,
+    [STORAGE_KEYS.watchTime]: nextWatchFocusedTimeMs,
+    [STORAGE_KEYS.browseTime]: nextBrowseFocusedTimeMs
   });
 
   if (shouldLog) {
+    const incrementedBucket =
+      pageType === "shorts"
+        ? STORAGE_KEYS.shortsTime
+        : pageType === "watch"
+          ? STORAGE_KEYS.watchTime
+          : STORAGE_KEYS.browseTime;
+
     console.log("[YouTube Tracker] Added active YouTube time.", {
-      today,
+      today: metrics.today,
       addedMs: 1000,
-      activeYouTubeTimeMs: next,
+      pageType,
+      incrementedBucket,
+      activeYouTubeTimeMs: nextActiveYouTubeTimeMs,
+      shortsFocusedTimeMs: nextShortsFocusedTimeMs,
+      watchFocusedTimeMs: nextWatchFocusedTimeMs,
+      browseFocusedTimeMs: nextBrowseFocusedTimeMs,
       url,
-      pageType
+      // Sanity check: total should match bucket sum.
+      bucketSum:
+        nextShortsFocusedTimeMs + nextWatchFocusedTimeMs + nextBrowseFocusedTimeMs
     });
   }
 }
