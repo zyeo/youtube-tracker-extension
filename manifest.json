@@ -5,6 +5,7 @@
   "description": "Minimal YouTube usage tracker (initial slice).",
   "permissions": [
     "tabs",
+    "windows",
     "storage"
   ],
   "host_permissions": [

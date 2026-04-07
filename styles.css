@@ -38,3 +38,11 @@ body {
   color: #ffffff;
 }
 
+.popup-divider {
+  margin-top: 12px;
+}
+
+.popup-count-time {
+  font-variant-numeric: tabular-nums;
+}
+

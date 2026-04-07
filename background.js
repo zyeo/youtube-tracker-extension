@@ -4,6 +4,7 @@
 // Storage keys for the first real metric.
 const STORAGE_KEYS = {
   count: "youtubeOpenCount",
+  time: "activeYouTubeTimeMs",
   date: "youtubeOpenDate"
 };
 
@@ -100,35 +101,60 @@ function logYouTubeTab(tab) {
  * @param {{url: string, pageType: string, reason: string}} details
  */
 async function incrementYouTubeOpensToday(details) {
-  const today = getTodayDateString();
-  const stored = await storageGet([STORAGE_KEYS.count, STORAGE_KEYS.date]);
-
-  const storedDate = stored[STORAGE_KEYS.date];
-  let count = Number(stored[STORAGE_KEYS.count] ?? 0);
-
-  // If the stored date isn't today, reset for the new day.
-  if (storedDate !== today) {
-    console.log("[YouTube Tracker] New day detected. Resetting counter.", {
-      storedDate,
-      today
-    });
-    count = 0;
-  }
-
-  count += 1;
+  const { today, youtubeOpenCount } = await ensureTodayDailyMetrics();
+  const nextCount = youtubeOpenCount + 1;
 
   await storageSet({
     [STORAGE_KEYS.date]: today,
-    [STORAGE_KEYS.count]: count
+    [STORAGE_KEYS.count]: nextCount
   });
 
   console.log("[YouTube Tracker] Counted a YouTube open.", {
     today,
-    count,
+    count: nextCount,
     reason: details.reason,
     url: details.url,
     pageType: details.pageType
   });
+}
+
+/**
+ * Ensure the stored "daily metrics" keys match today's date.
+ * If not, reset both:
+ * - youtubeOpenCount
+ * - activeYouTubeTimeMs
+ *
+ * @returns {Promise<{today: string, youtubeOpenCount: number, activeYouTubeTimeMs: number}>}
+ */
+async function ensureTodayDailyMetrics() {
+  const today = getTodayDateString();
+  const stored = await storageGet([
+    STORAGE_KEYS.count,
+    STORAGE_KEYS.time,
+    STORAGE_KEYS.date
+  ]);
+
+  const storedDate = stored[STORAGE_KEYS.date];
+  let youtubeOpenCount = Number(stored[STORAGE_KEYS.count] ?? 0);
+  let activeYouTubeTimeMs = Number(stored[STORAGE_KEYS.time] ?? 0);
+
+  // If the stored date isn't today, reset for the new day.
+  if (storedDate !== today) {
+    console.log("[YouTube Tracker] New day detected. Resetting metrics.", {
+      storedDate,
+      today
+    });
+    youtubeOpenCount = 0;
+    activeYouTubeTimeMs = 0;
+
+    await storageSet({
+      [STORAGE_KEYS.date]: today,
+      [STORAGE_KEYS.count]: youtubeOpenCount,
+      [STORAGE_KEYS.time]: activeYouTubeTimeMs
+    });
+  }
+
+  return { today, youtubeOpenCount, activeYouTubeTimeMs };
 }
 
 // --- State tracking to enforce counting rules ---
@@ -195,4 +221,113 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
     }
   });
 });
+
+// --- Active YouTube time tracking ---
+// NOTE: This uses setInterval (1s) as requested. MV3 service workers may sleep
+// when idle, so time tracking depends on the service worker staying alive.
+
+let isChromeFocused = false;
+let focusedWindowId = null;
+
+// Track whether we are currently counting time for an active YouTube tab.
+let isCurrentlyCountingActiveYouTube = false;
+let activeTimeTickCounter = 0; // just for reference in logs
+let activeTimeTickInProgress = false;
+
+// Initialize focus state and keep it updated.
+if (chrome.windows && chrome.windows.getLastFocused) {
+  chrome.windows.getLastFocused((win) => {
+    const id = win && typeof win.id === "number" ? win.id : null;
+    focusedWindowId = id;
+    isChromeFocused = id !== null;
+  });
+}
+
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  // windowId === -1 means "no focused window".
+  focusedWindowId = windowId === -1 ? null : windowId;
+  isChromeFocused = focusedWindowId !== null;
+
+  console.log("[YouTube Tracker] Chrome focus changed.", {
+    windowId,
+    isChromeFocused
+  });
+});
+
+function tabsQueryActiveInWindow(windowId) {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, windowId }, (tabs) => resolve(tabs));
+  });
+}
+
+async function incrementActiveYouTubeTimeMsBy1000({ url, pageType, shouldLog }) {
+  const { today, activeYouTubeTimeMs } = await ensureTodayDailyMetrics();
+  const next = activeYouTubeTimeMs + 1000;
+
+  await storageSet({
+    [STORAGE_KEYS.date]: today,
+    [STORAGE_KEYS.time]: next
+  });
+
+  if (shouldLog) {
+    console.log("[YouTube Tracker] Added active YouTube time.", {
+      today,
+      addedMs: 1000,
+      activeYouTubeTimeMs: next,
+      url,
+      pageType
+    });
+  }
+}
+
+async function tickActiveYouTubeTime() {
+  if (activeTimeTickInProgress) return;
+  activeTimeTickInProgress = true;
+
+  try {
+    // Only count when the Chrome window is focused.
+    if (!isChromeFocused || focusedWindowId === null) {
+      isCurrentlyCountingActiveYouTube = false;
+      return;
+    }
+
+    const tabs = await tabsQueryActiveInWindow(focusedWindowId);
+    const tab = tabs && tabs.length ? tabs[0] : null;
+    if (!tab || !tab.url) {
+      isCurrentlyCountingActiveYouTube = false;
+      return;
+    }
+
+    const pageType = getYouTubePageType(tab.url);
+    if (!pageType) {
+      isCurrentlyCountingActiveYouTube = false;
+      return;
+    }
+
+    const justStarted = !isCurrentlyCountingActiveYouTube;
+    isCurrentlyCountingActiveYouTube = true;
+
+    activeTimeTickCounter += 1;
+    const shouldLog = true; // log every second we add time (requested)
+
+    await incrementActiveYouTubeTimeMsBy1000({
+      url: tab.url,
+      pageType,
+      shouldLog
+    });
+  } finally {
+    activeTimeTickInProgress = false;
+  }
+}
+
+let activeTimeIntervalStarted = false;
+function startActiveTimeInterval() {
+  if (activeTimeIntervalStarted) return;
+  activeTimeIntervalStarted = true;
+  setInterval(() => {
+    void tickActiveYouTubeTime();
+  }, 1000);
+}
+
+startActiveTimeInterval();
 
