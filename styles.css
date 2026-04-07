@@ -30,3 +30,11 @@ body {
   color: #cbd5f5;
 }
 
+.popup-count {
+  margin-top: 6px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+}
+
