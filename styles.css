@@ -14,7 +14,7 @@ body {
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .popup-title {
@@ -31,23 +31,82 @@ body {
 }
 
 .popup-count {
-  margin-top: 4px;
-  font-size: 24px;
+  margin-top: 2px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
   color: #ffffff;
-}
-
-.popup-divider {
-  margin-top: 12px;
 }
 
 .popup-count-time {
   font-variant-numeric: tabular-nums;
 }
 
+.popup-main-metric {
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  background: #0b1224;
+  padding: 10px;
+}
+
+.popup-total-time {
+  margin-top: 4px;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  color: #ffffff;
+}
+
+.popup-submetrics {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popup-submetric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.popup-submetric-label {
+  font-size: 12px;
+  color: #cbd5f5;
+}
+
+.popup-submetric-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+.popup-lower-section {
+  border-top: 1px solid #1f2937;
+  padding-top: 10px;
+}
+
+.popup-comparison {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.popup-comparison.is-up {
+  color: #4ade80;
+}
+
+.popup-comparison.is-down {
+  color: #f87171;
+}
+
+.popup-comparison.is-neutral {
+  color: #94a3b8;
+}
+
 .popup-button {
-  margin-top: 14px;
+  margin-top: 4px;
   padding: 6px 10px;
   border-radius: 6px;
   border: none;

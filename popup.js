@@ -1,5 +1,5 @@
 // popup.js - YouTube Tracker
-// Shows the "YouTube opens today" count from chrome.storage.local.
+// Shows today's metrics from chrome.storage.local dailyStats history.
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[YouTube Tracker] Popup loaded.");
@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const shortsTimeEl = document.getElementById("shortsTime");
   const watchTimeEl = document.getElementById("watchTime");
   const browseTimeEl = document.getElementById("browseTime");
+  const opensComparisonEl = document.getElementById("opensComparison");
   const openDashboardBtn = document.getElementById("openDashboard");
 
   const STORAGE_KEYS = {
@@ -42,11 +43,45 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${hh}:${mm}:${ss}`;
   }
 
+  function getYesterdayDateString() {
+    const now = new Date();
+    now.setDate(now.getDate() - 1);
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function getOpensComparison(todayCount, yesterdayCount) {
+    const today = Number(todayCount ?? 0);
+    const yesterday = Number(yesterdayCount ?? 0);
+
+    if (today === yesterday) {
+      return { text: "No change vs yesterday", tone: "neutral" };
+    }
+
+    if (yesterday === 0 && today > 0) {
+      return { text: "↑ from 0 yesterday", tone: "up" };
+    }
+
+    if (today > yesterday) {
+      const increasePct = Math.round(((today - yesterday) / yesterday) * 100);
+      return { text: `↑ ${increasePct}% vs yesterday`, tone: "up" };
+    }
+
+    const decreasePct = Math.round(((yesterday - today) / yesterday) * 100);
+    return { text: `↓ ${decreasePct}% vs yesterday`, tone: "down" };
+  }
+
   function updateMetricsDisplay(dailyStatsObj) {
     const today = getTodayDateString();
+    const yesterday = getYesterdayDateString();
     const todayStats = (dailyStatsObj && dailyStatsObj[today]) || {};
+    const yesterdayStats = (dailyStatsObj && dailyStatsObj[yesterday]) || {};
 
     const youtubeOpenCount = Number(todayStats.youtubeOpenCount ?? 0);
+    const yesterdayOpenCount = Number(yesterdayStats.youtubeOpenCount ?? 0);
+    // Main popup metric is total YouTube focused time today.
     const focusedYouTubeTimeMs = Number(todayStats.activeYouTubeTimeMs ?? 0);
     const shortsFocusedTimeMs = Number(todayStats.shortsFocusedTimeMs ?? 0);
     const watchFocusedTimeMs = Number(todayStats.watchFocusedTimeMs ?? 0);
@@ -59,6 +94,13 @@ document.addEventListener("DOMContentLoaded", () => {
     shortsTimeEl.textContent = formatMsAsClock(shortsFocusedTimeMs);
     watchTimeEl.textContent = formatMsAsClock(watchFocusedTimeMs);
     browseTimeEl.textContent = formatMsAsClock(browseFocusedTimeMs);
+
+    if (opensComparisonEl) {
+      const comparison = getOpensComparison(youtubeOpenCount, yesterdayOpenCount);
+      opensComparisonEl.textContent = comparison.text;
+      opensComparisonEl.classList.remove("is-up", "is-down", "is-neutral");
+      opensComparisonEl.classList.add(`is-${comparison.tone}`);
+    }
   }
 
   function readAndRender() {

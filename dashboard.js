@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const summaryShorts = document.getElementById("summary-shorts");
   const summaryWatch = document.getElementById("summary-watch");
   const summaryBrowse = document.getElementById("summary-browse");
+  const weeklySummary = document.getElementById("weekly-summary");
 
   function getTodayDateString() {
     const now = new Date();
@@ -47,6 +48,14 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${hours}h ${minutes}m`;
   }
 
+  function formatMsAsHoursMinutes(ms) {
+    const totalMinutes = Math.floor(Number(ms ?? 0) / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours === 0) return `${minutes}m`;
+    return `${hours}h ${minutes}m`;
+  }
+
   chrome.storage.local.get(["dailyStats"], (data) => {
     const dailyStats = data.dailyStats || {};
     const entries = Object.entries(dailyStats);
@@ -77,6 +86,14 @@ document.addEventListener("DOMContentLoaded", () => {
       watchMs.push(Number(s.watchFocusedTimeMs ?? 0));
       browseMs.push(Number(s.browseFocusedTimeMs ?? 0));
     });
+
+    const weeklyTotalFocusedMs = focusedTimeMs.reduce((sum, value) => sum + value, 0);
+    const weeklyTotalOpens = opensCounts.reduce((sum, value) => sum + value, 0);
+    if (weeklySummary) {
+      weeklySummary.textContent = `You spent ${formatMsAsHoursMinutes(
+        weeklyTotalFocusedMs
+      )} on YouTube this week across ${weeklyTotalOpens} opens.`;
+    }
 
     // Summary for today.
     const today = getTodayDateString();

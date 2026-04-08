@@ -8,20 +8,31 @@
   <body>
     <div class="popup-container">
       <h1 class="popup-title">YouTube Tracker</h1>
-      <p class="popup-text">YouTube opens today</p>
-      <div id="openCount" class="popup-count">0</div>
+      <section class="popup-main-metric">
+        <p class="popup-text">YouTube time today</p>
+        <div id="focusedTime" class="popup-total-time popup-count-time">00:00</div>
 
-      <p class="popup-text popup-divider">Focused YouTube time today</p>
-      <div id="focusedTime" class="popup-count popup-count-time">00:00</div>
+        <div class="popup-submetrics">
+          <div class="popup-submetric-row">
+            <span class="popup-submetric-label">Shorts time</span>
+            <span id="shortsTime" class="popup-submetric-value popup-count-time">00:00</span>
+          </div>
+          <div class="popup-submetric-row">
+            <span class="popup-submetric-label">Watch time</span>
+            <span id="watchTime" class="popup-submetric-value popup-count-time">00:00</span>
+          </div>
+          <div class="popup-submetric-row">
+            <span class="popup-submetric-label">Browse time</span>
+            <span id="browseTime" class="popup-submetric-value popup-count-time">00:00</span>
+          </div>
+        </div>
+      </section>
 
-      <p class="popup-text popup-divider">Shorts focused time</p>
-      <div id="shortsTime" class="popup-count popup-count-time">00:00</div>
-
-      <p class="popup-text popup-divider">Watch page focused time</p>
-      <div id="watchTime" class="popup-count popup-count-time">00:00</div>
-
-      <p class="popup-text popup-divider">Browse focused time</p>
-      <div id="browseTime" class="popup-count popup-count-time">00:00</div>
+      <section class="popup-lower-section">
+        <p class="popup-text">YouTube opens today</p>
+        <div id="openCount" class="popup-count">0</div>
+        <div id="opensComparison" class="popup-comparison">No change vs yesterday</div>
+      </section>
 
       <button id="openDashboard" class="popup-button">Open dashboard</button>
     </div>
