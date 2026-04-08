@@ -33,6 +33,20 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${hh}:${mm}:${ss}`;
   }
 
+  function msToDecimalHours(ms) {
+    return Math.round((Number(ms ?? 0) / 3600000) * 100) / 100;
+  }
+
+  function formatMsForTooltip(ms) {
+    const totalMinutes = Math.floor(Number(ms ?? 0) / 60000);
+    if (totalMinutes < 60) {
+      return `${totalMinutes}m`;
+    }
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${minutes}m`;
+  }
+
   chrome.storage.local.get(["dailyStats"], (data) => {
     const dailyStats = data.dailyStats || {};
     const entries = Object.entries(dailyStats);
@@ -73,7 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
     summaryWatch.textContent = formatMsAsClock(todayStats.watchFocusedTimeMs ?? 0);
     summaryBrowse.textContent = formatMsAsClock(todayStats.browseFocusedTimeMs ?? 0);
 
-    // Focused time chart (total focused ms -> minutes).
+    // Focused time chart (total focused ms -> hours).
     const focusedCtx = document.getElementById("focusedTimeChart").getContext("2d");
     new Chart(focusedCtx, {
       type: "line",
@@ -81,8 +95,8 @@ document.addEventListener("DOMContentLoaded", () => {
         labels,
         datasets: [
           {
-            label: "Focused minutes",
-            data: focusedTimeMs.map((ms) => Math.round(ms / 600) / 100), // minutes with 2 decimals
+            label: "Focused time",
+            data: focusedTimeMs.map(msToDecimalHours),
             borderColor: "#38bdf8",
             backgroundColor: "rgba(56, 189, 248, 0.2)",
             tension: 0.25,
@@ -97,6 +111,14 @@ document.addEventListener("DOMContentLoaded", () => {
             labels: {
               color: "#e5e7eb"
             }
+          },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const index = context.dataIndex;
+                return `Focused time: ${formatMsForTooltip(focusedTimeMs[index])}`;
+              }
+            }
           }
         },
         scales: {
@@ -106,6 +128,11 @@ document.addEventListener("DOMContentLoaded", () => {
           },
           y: {
             ticks: { color: "#9ca3af" },
+            title: {
+              display: true,
+              text: "Hours",
+              color: "#9ca3af"
+            },
             grid: { color: "rgba(55,65,81,0.5)" }
           }
         }
@@ -144,6 +171,11 @@ document.addEventListener("DOMContentLoaded", () => {
           },
           y: {
             ticks: { color: "#9ca3af" },
+            title: {
+              display: true,
+              text: "Opens",
+              color: "#9ca3af"
+            },
             grid: { color: "rgba(55,65,81,0.5)" }
           }
         }
@@ -160,18 +192,18 @@ document.addEventListener("DOMContentLoaded", () => {
         labels,
         datasets: [
           {
-            label: "Shorts minutes",
-            data: shortsMs.map((ms) => Math.round(ms / 600) / 100),
+            label: "Shorts",
+            data: shortsMs.map(msToDecimalHours),
             backgroundColor: "#f97316"
           },
           {
-            label: "Watch minutes",
-            data: watchMs.map((ms) => Math.round(ms / 600) / 100),
+            label: "Watch",
+            data: watchMs.map(msToDecimalHours),
             backgroundColor: "#6366f1"
           },
           {
-            label: "Browse minutes",
-            data: browseMs.map((ms) => Math.round(ms / 600) / 100),
+            label: "Browse",
+            data: browseMs.map(msToDecimalHours),
             backgroundColor: "#22c55e"
           }
         ]
@@ -182,6 +214,20 @@ document.addEventListener("DOMContentLoaded", () => {
           legend: {
             labels: {
               color: "#e5e7eb"
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const index = context.dataIndex;
+                if (context.dataset.label === "Shorts") {
+                  return `Shorts: ${formatMsForTooltip(shortsMs[index])}`;
+                }
+                if (context.dataset.label === "Watch") {
+                  return `Watch: ${formatMsForTooltip(watchMs[index])}`;
+                }
+                return `Browse: ${formatMsForTooltip(browseMs[index])}`;
+              }
             }
           }
         },
@@ -194,6 +240,11 @@ document.addEventListener("DOMContentLoaded", () => {
           y: {
             stacked: true,
             ticks: { color: "#9ca3af" },
+            title: {
+              display: true,
+              text: "Hours",
+              color: "#9ca3af"
+            },
             grid: { color: "rgba(55,65,81,0.5)" }
           }
         }
