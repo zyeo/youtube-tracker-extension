@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const shortsTimeEl = document.getElementById("shortsTime");
   const watchTimeEl = document.getElementById("watchTime");
   const browseTimeEl = document.getElementById("browseTime");
+  const timeComparisonEl = document.getElementById("timeComparison");
   const opensComparisonEl = document.getElementById("opensComparison");
   const openDashboardBtn = document.getElementById("openDashboard");
 
@@ -52,9 +53,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${yyyy}-${mm}-${dd}`;
   }
 
-  function getOpensComparison(todayCount, yesterdayCount) {
-    const today = Number(todayCount ?? 0);
-    const yesterday = Number(yesterdayCount ?? 0);
+  function getVsYesterdayComparison(todayValue, yesterdayValue) {
+    const today = Number(todayValue ?? 0);
+    const yesterday = Number(yesterdayValue ?? 0);
 
     if (today === yesterday) {
       return { text: "No change vs yesterday", tone: "neutral" };
@@ -83,6 +84,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const yesterdayOpenCount = Number(yesterdayStats.youtubeOpenCount ?? 0);
     // Main popup metric is total YouTube focused time today.
     const focusedYouTubeTimeMs = Number(todayStats.activeYouTubeTimeMs ?? 0);
+    const yesterdayFocusedYouTubeTimeMs = Number(
+      yesterdayStats.activeYouTubeTimeMs ?? 0
+    );
     const shortsFocusedTimeMs = Number(todayStats.shortsFocusedTimeMs ?? 0);
     const watchFocusedTimeMs = Number(todayStats.watchFocusedTimeMs ?? 0);
     const browseFocusedTimeMs = Number(todayStats.browseFocusedTimeMs ?? 0);
@@ -95,8 +99,21 @@ document.addEventListener("DOMContentLoaded", () => {
     watchTimeEl.textContent = formatMsAsClock(watchFocusedTimeMs);
     browseTimeEl.textContent = formatMsAsClock(browseFocusedTimeMs);
 
+    if (timeComparisonEl) {
+      const comparison = getVsYesterdayComparison(
+        focusedYouTubeTimeMs,
+        yesterdayFocusedYouTubeTimeMs
+      );
+      timeComparisonEl.textContent = comparison.text;
+      timeComparisonEl.classList.remove("is-up", "is-down", "is-neutral");
+      timeComparisonEl.classList.add(`is-${comparison.tone}`);
+    }
+
     if (opensComparisonEl) {
-      const comparison = getOpensComparison(youtubeOpenCount, yesterdayOpenCount);
+      const comparison = getVsYesterdayComparison(
+        youtubeOpenCount,
+        yesterdayOpenCount
+      );
       opensComparisonEl.textContent = comparison.text;
       opensComparisonEl.classList.remove("is-up", "is-down", "is-neutral");
       opensComparisonEl.classList.add(`is-${comparison.tone}`);

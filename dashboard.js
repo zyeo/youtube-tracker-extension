@@ -104,7 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
     summaryWatch.textContent = formatMsAsClock(todayStats.watchFocusedTimeMs ?? 0);
     summaryBrowse.textContent = formatMsAsClock(todayStats.browseFocusedTimeMs ?? 0);
 
-    // Focused time chart (total focused ms -> hours).
+    // YouTube time chart (ms -> hours on y-axis).
     const focusedCtx = document.getElementById("focusedTimeChart").getContext("2d");
     new Chart(focusedCtx, {
       type: "line",
@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
         labels,
         datasets: [
           {
-            label: "Focused time",
+            label: "YouTube time",
             data: focusedTimeMs.map(msToDecimalHours),
             borderColor: "#38bdf8",
             backgroundColor: "rgba(56, 189, 248, 0.2)",
@@ -133,7 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
             callbacks: {
               label(context) {
                 const index = context.dataIndex;
-                return `Focused time: ${formatMsForTooltip(focusedTimeMs[index])}`;
+                return `YouTube time: ${formatMsForTooltip(focusedTimeMs[index])}`;
               }
             }
           }
@@ -209,17 +209,17 @@ document.addEventListener("DOMContentLoaded", () => {
         labels,
         datasets: [
           {
-            label: "Shorts",
+            label: "Shorts time",
             data: shortsMs.map(msToDecimalHours),
             backgroundColor: "#f97316"
           },
           {
-            label: "Watch",
+            label: "Watch time",
             data: watchMs.map(msToDecimalHours),
             backgroundColor: "#6366f1"
           },
           {
-            label: "Browse",
+            label: "Browse time",
             data: browseMs.map(msToDecimalHours),
             backgroundColor: "#22c55e"
           }
@@ -237,13 +237,13 @@ document.addEventListener("DOMContentLoaded", () => {
             callbacks: {
               label(context) {
                 const index = context.dataIndex;
-                if (context.dataset.label === "Shorts") {
-                  return `Shorts: ${formatMsForTooltip(shortsMs[index])}`;
+                if (context.dataset.label === "Shorts time") {
+                  return `Shorts time: ${formatMsForTooltip(shortsMs[index])}`;
                 }
-                if (context.dataset.label === "Watch") {
-                  return `Watch: ${formatMsForTooltip(watchMs[index])}`;
+                if (context.dataset.label === "Watch time") {
+                  return `Watch time: ${formatMsForTooltip(watchMs[index])}`;
                 }
-                return `Browse: ${formatMsForTooltip(browseMs[index])}`;
+                return `Browse time: ${formatMsForTooltip(browseMs[index])}`;
               }
             }
           }
