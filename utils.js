@@ -77,6 +77,26 @@ function isValidDailyStatsDateKey(key) {
   );
 }
 
+export function normalizeRetentionDays(retentionDays, defaultValue = 90) {
+  const defaultNumber = Number(defaultValue);
+  const normalizedDefault = Math.max(
+    1,
+    Math.floor(Number.isFinite(defaultNumber) ? defaultNumber : 90)
+  );
+  if (retentionDays === null || String(retentionDays).trim() === "") {
+    return normalizedDefault;
+  }
+  const retentionNumber = Number(retentionDays);
+  if (!Number.isFinite(retentionNumber) || retentionNumber <= 0) {
+    return normalizedDefault;
+  }
+
+  return Math.max(
+    1,
+    Math.floor(retentionNumber)
+  );
+}
+
 /**
  * Keep dailyStats entries within the recent local-date retention window.
  * Non-YYYY-MM-DD keys are dropped because dailyStats is keyed by calendar date.
@@ -86,7 +106,7 @@ function isValidDailyStatsDateKey(key) {
  * @returns {object}
  */
 export function pruneDailyStats(dailyStats, asOfDate = new Date(), retentionDays = 90) {
-  const daysToKeep = Math.max(1, Math.floor(Number(retentionDays) || 90));
+  const daysToKeep = normalizeRetentionDays(retentionDays);
   const today = formatDateString(asOfDate);
   const cutoffDate = new Date(
     asOfDate.getFullYear(),

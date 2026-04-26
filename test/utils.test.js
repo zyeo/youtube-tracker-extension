@@ -9,6 +9,7 @@ import {
   formatMsForTooltip,
   getYouTubePageType,
   msToDecimalHours,
+  normalizeRetentionDays,
   pruneDailyStats
 } from "../utils.js";
 
@@ -121,6 +122,16 @@ test("pruneDailyStats retains entries in the 90-day window", () => {
   assert.deepEqual(pruneDailyStats(dailyStats, new Date(2026, 3, 26)), dailyStats);
 });
 
+test("normalizeRetentionDays keeps the default and clamps invalid values", () => {
+  assert.equal(normalizeRetentionDays(undefined), 90);
+  assert.equal(normalizeRetentionDays(null), 90);
+  assert.equal(normalizeRetentionDays(""), 90);
+  assert.equal(normalizeRetentionDays("   "), 90);
+  assert.equal(normalizeRetentionDays(30.8), 30);
+  assert.equal(normalizeRetentionDays(0), 90);
+  assert.equal(normalizeRetentionDays(-5), 90);
+});
+
 test("pruneDailyStats drops old and malformed date keys", () => {
   const dailyStats = {
     "2026-01-26": { youtubeOpenCount: 1 },
@@ -131,6 +142,19 @@ test("pruneDailyStats drops old and malformed date keys", () => {
 
   assert.deepEqual(pruneDailyStats(dailyStats, new Date(2026, 3, 26)), {
     "2026-01-27": { youtubeOpenCount: 2 }
+  });
+});
+
+test("pruneDailyStats uses a custom retention window", () => {
+  const dailyStats = {
+    "2026-04-19": { youtubeOpenCount: 1 },
+    "2026-04-20": { youtubeOpenCount: 2 },
+    "2026-04-26": { youtubeOpenCount: 3 }
+  };
+
+  assert.deepEqual(pruneDailyStats(dailyStats, new Date(2026, 3, 26), 7), {
+    "2026-04-20": { youtubeOpenCount: 2 },
+    "2026-04-26": { youtubeOpenCount: 3 }
   });
 });
 

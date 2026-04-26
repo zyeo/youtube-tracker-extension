@@ -4,6 +4,7 @@
 import {
   applyFocusedYouTubeSessionToDailyStats,
   getTodayDateString,
+  normalizeRetentionDays,
   getYouTubePageType,
   pruneDailyStats
 } from "./utils.js";
@@ -12,7 +13,8 @@ import {
 const STORAGE_KEYS = {
   dailyStats: "dailyStats",
   activeSession: "activeSession",
-  activeState: "activeState"
+  activeState: "activeState",
+  retentionDays: "retentionDays"
 };
 const ACTIVE_SESSION_ALARM_NAME = "active-session-commit";
 const ACTIVE_SESSION_ALARM_PERIOD_MINUTES = 1;
@@ -28,6 +30,11 @@ function storageGet(keys) {
 }
 function storageSet(items) {
   return new Promise((resolve) => chrome.storage.local.set(items, resolve));
+}
+
+async function getRetentionDays() {
+  const stored = await storageGet([STORAGE_KEYS.retentionDays]);
+  return normalizeRetentionDays(stored[STORAGE_KEYS.retentionDays]);
 }
 
 /**
@@ -302,12 +309,13 @@ async function updateOpenCountForActiveTab(tab, windowId, details) {
 
   if (hadPreviousWindowState && !previousWindowWasYouTube && isYouTube) {
     const { today, dailyStats, todayStats } = await getOrInitTodayStats();
+    const retentionDays = await getRetentionDays();
     const nextCount = todayStats.youtubeOpenCount + 1;
     todayStats.youtubeOpenCount = nextCount;
     dailyStats[today] = todayStats;
 
     await storageSet({
-      [STORAGE_KEYS.dailyStats]: pruneDailyStats(dailyStats),
+      [STORAGE_KEYS.dailyStats]: pruneDailyStats(dailyStats, new Date(), retentionDays),
       [STORAGE_KEYS.activeState]: nextActiveState
     });
 
@@ -399,10 +407,16 @@ async function commitStoredActiveSession(now) {
   const stored = await storageGet([
     STORAGE_KEYS.dailyStats,
     STORAGE_KEYS.activeSession,
-    STORAGE_KEYS.activeState
+    STORAGE_KEYS.activeState,
+    STORAGE_KEYS.retentionDays
   ]);
   const activeSession = stored[STORAGE_KEYS.activeSession];
-  const dailyStats = pruneDailyStats(stored[STORAGE_KEYS.dailyStats] || {});
+  const retentionDays = normalizeRetentionDays(stored[STORAGE_KEYS.retentionDays]);
+  const dailyStats = pruneDailyStats(
+    stored[STORAGE_KEYS.dailyStats] || {},
+    new Date(now),
+    retentionDays
+  );
   const activeState = cloneActiveState(stored[STORAGE_KEYS.activeState]);
 
   if (!activeSession) {

@@ -9,14 +9,28 @@
     <main class="options-container">
       <header class="options-header">
         <h1 class="options-title">YouTube Tracker Options</h1>
-        <p class="options-subtitle">Settings will appear here in a future update.</p>
+        <p class="options-subtitle">Configure local data retention for daily history.</p>
       </header>
 
-      <section class="options-card" aria-labelledby="options-status-title">
-        <h2 id="options-status-title" class="options-card-title">Options page ready</h2>
+      <section class="options-card" aria-labelledby="retention-title">
+        <h2 id="retention-title" class="options-card-title">Daily history retention</h2>
         <p class="options-card-text">
-          There are no configurable settings yet.
+          Choose how many days of daily stats to keep in local storage.
         </p>
+        <form id="retention-form">
+          <label for="retention-days">Retention days</label>
+          <input
+            id="retention-days"
+            name="retentionDays"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            required
+          />
+          <button type="submit">Save</button>
+          <p id="save-status" class="options-card-text" aria-live="polite"></p>
+        </form>
       </section>
     </main>
 
