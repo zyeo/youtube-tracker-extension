@@ -11,6 +11,7 @@ import {
   getDailyGoalProgress,
   getDailyGoalNotificationDates,
   getElapsedSessionMs,
+  getOpenCountTransitionUpdate,
   getYouTubePageType,
   getYouTubePageTypeLabel,
   msToDecimalHours,
@@ -18,6 +19,7 @@ import {
   normalizeRetentionDays,
   pruneDailyStats,
   pruneSessionHistory,
+  shouldCountYouTubeOpen,
   shouldNotifyDailyGoalExceeded
 } from "../utils.js";
 
@@ -196,6 +198,130 @@ test("shouldNotifyDailyGoalExceeded only fires on the first crossing", () => {
     shouldNotifyDailyGoalExceeded(-1, 60 * 60_000, 0, false),
     true
   );
+});
+
+test("shouldCountYouTubeOpen only counts non-YouTube to YouTube transitions after initial state", () => {
+  assert.equal(
+    shouldCountYouTubeOpen({
+      hadPreviousWindowState: false,
+      previousWindowWasYouTube: false,
+      isYouTube: true
+    }),
+    false
+  );
+  assert.equal(
+    shouldCountYouTubeOpen({
+      hadPreviousWindowState: true,
+      previousWindowWasYouTube: false,
+      isYouTube: true
+    }),
+    true
+  );
+  assert.equal(
+    shouldCountYouTubeOpen({
+      hadPreviousWindowState: true,
+      previousWindowWasYouTube: true,
+      isYouTube: true
+    }),
+    false
+  );
+  assert.equal(
+    shouldCountYouTubeOpen({
+      hadPreviousWindowState: true,
+      previousWindowWasYouTube: true,
+      isYouTube: false
+    }),
+    false
+  );
+  assert.equal(
+    shouldCountYouTubeOpen({
+      hadPreviousWindowState: true,
+      previousWindowWasYouTube: false,
+      isYouTube: false
+    }),
+    false
+  );
+});
+
+test("getOpenCountTransitionUpdate updates active state without counting initial YouTube state", () => {
+  const transition = getOpenCountTransitionUpdate({
+    activeState: {},
+    dailyStats: {},
+    today: "2026-04-26",
+    tab: { id: 11, windowId: 3 },
+    isYouTube: true
+  });
+
+  assert.deepEqual(transition, {
+    activeState: {
+      windows: { "3": true },
+      tabs: { "11": true }
+    },
+    dailyStats: {},
+    counted: false,
+    count: null
+  });
+});
+
+test("getOpenCountTransitionUpdate increments today's count on non-YouTube to YouTube", () => {
+  const dailyStats = {
+    "2026-04-26": {
+      youtubeOpenCount: 2,
+      activeYouTubeTimeMs: 5_000,
+      shortsFocusedTimeMs: 1_000,
+      watchFocusedTimeMs: 2_000,
+      browseFocusedTimeMs: 2_000
+    }
+  };
+  const transition = getOpenCountTransitionUpdate({
+    activeState: {
+      windows: { "3": false },
+      tabs: { "10": false }
+    },
+    dailyStats,
+    today: "2026-04-26",
+    tab: { id: 11, windowId: 3 },
+    isYouTube: true
+  });
+
+  assert.notEqual(transition.dailyStats, dailyStats);
+  assert.deepEqual(transition, {
+    activeState: {
+      windows: { "3": true },
+      tabs: { "10": false, "11": true }
+    },
+    dailyStats: {
+      "2026-04-26": {
+        youtubeOpenCount: 3,
+        activeYouTubeTimeMs: 5_000,
+        shortsFocusedTimeMs: 1_000,
+        watchFocusedTimeMs: 2_000,
+        browseFocusedTimeMs: 2_000
+      }
+    },
+    counted: true,
+    count: 3
+  });
+});
+
+test("getOpenCountTransitionUpdate initializes today's stats when counting", () => {
+  const transition = getOpenCountTransitionUpdate({
+    activeState: {
+      windows: { "3": false }
+    },
+    dailyStats: {},
+    today: "2026-04-26",
+    tab: { id: 11, windowId: 3 },
+    isYouTube: true
+  });
+
+  assert.deepEqual(transition.dailyStats["2026-04-26"], {
+    youtubeOpenCount: 1,
+    activeYouTubeTimeMs: 0,
+    shortsFocusedTimeMs: 0,
+    watchFocusedTimeMs: 0,
+    browseFocusedTimeMs: 0
+  });
 });
 
 test("getDailyGoalNotificationDates finds same-day and cross-midnight crossings", () => {

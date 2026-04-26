@@ -5,6 +5,7 @@ import {
   applyFocusedYouTubeSessionToDailyStats,
   createSessionHistoryRecord,
   getDailyGoalNotificationDates,
+  getOpenCountTransitionUpdate,
   getTodayDateString,
   normalizeDailyGoalMinutes,
   normalizeRetentionDays,
@@ -93,44 +94,6 @@ function logYouTubeTab(tab) {
     url: tab.url,
     pageType
   });
-}
-
-/**
- * Get today's stats entry from the daily history, creating it if needed.
- * Shape in storage:
- * {
- *   dailyStats: {
- *     "YYYY-MM-DD": {
- *       youtubeOpenCount,
- *       activeYouTubeTimeMs,
- *       shortsFocusedTimeMs,
- *       watchFocusedTimeMs,
- *       browseFocusedTimeMs
- *     }
- *   }
- * }
- */
-async function getOrInitTodayStats() {
-  const today = getTodayDateString();
-  const stored = await storageGet([STORAGE_KEYS.dailyStats]);
-  const dailyStats = stored[STORAGE_KEYS.dailyStats] || {};
-
-  const emptyStats = {
-    youtubeOpenCount: 0,
-    activeYouTubeTimeMs: 0,
-    shortsFocusedTimeMs: 0,
-    watchFocusedTimeMs: 0,
-    browseFocusedTimeMs: 0
-  };
-
-  const todayStats = {
-    ...emptyStats,
-    ...(dailyStats[today] || {})
-  };
-
-  dailyStats[today] = todayStats;
-
-  return { today, dailyStats, todayStats };
 }
 
 // --- State tracking to enforce counting rules ---
@@ -330,36 +293,40 @@ async function updateOpenCountForActiveTab(tab, windowId, details) {
   if (!tab || typeof windowId !== "number") return;
 
   const { isYouTube, pageType } = classifyTab(tab);
-  const stored = await storageGet([STORAGE_KEYS.activeState]);
+  const stored = await storageGet([
+    STORAGE_KEYS.activeState,
+    STORAGE_KEYS.dailyStats
+  ]);
   const activeState = cloneActiveState(stored[STORAGE_KEYS.activeState]);
-  const windowKey = String(windowId);
-  const hadPreviousWindowState = Object.prototype.hasOwnProperty.call(
-    activeState.windows,
-    windowKey
-  );
-  const previousWindowWasYouTube = Boolean(activeState.windows[windowKey]);
-  const nextActiveState = updateActiveStateForTab(activeState, tab, isYouTube);
+  const today = getTodayDateString();
+  const transition = getOpenCountTransitionUpdate({
+    activeState,
+    dailyStats: stored[STORAGE_KEYS.dailyStats] || {},
+    today,
+    tab,
+    isYouTube
+  });
 
   lastActiveIsYouTubeByWindowId.set(windowId, isYouTube);
   if (typeof tab.id === "number") {
     isYouTubeByTabId.set(tab.id, isYouTube);
   }
 
-  if (hadPreviousWindowState && !previousWindowWasYouTube && isYouTube) {
-    const { today, dailyStats, todayStats } = await getOrInitTodayStats();
+  if (transition.counted) {
     const retentionDays = await getRetentionDays();
-    const nextCount = todayStats.youtubeOpenCount + 1;
-    todayStats.youtubeOpenCount = nextCount;
-    dailyStats[today] = todayStats;
 
     await storageSet({
-      [STORAGE_KEYS.dailyStats]: pruneDailyStats(dailyStats, new Date(), retentionDays),
-      [STORAGE_KEYS.activeState]: nextActiveState
+      [STORAGE_KEYS.dailyStats]: pruneDailyStats(
+        transition.dailyStats,
+        new Date(),
+        retentionDays
+      ),
+      [STORAGE_KEYS.activeState]: transition.activeState
     });
 
     console.log("[YouTube Tracker] Counted a YouTube open.", {
       today,
-      count: nextCount,
+      count: transition.count,
       reason: details.reason,
       url: tab.url,
       pageType: details.pageType || pageType
@@ -367,7 +334,7 @@ async function updateOpenCountForActiveTab(tab, windowId, details) {
     return;
   }
 
-  await storageSet({ [STORAGE_KEYS.activeState]: nextActiveState });
+  await storageSet({ [STORAGE_KEYS.activeState]: transition.activeState });
 }
 
 function enqueueOpenCountUpdate(tab, windowId, details) {

@@ -160,6 +160,14 @@ export function shouldNotifyDailyGoalExceeded(
   return previousFocusedMs < goalMs && nextFocusedMs >= goalMs;
 }
 
+export function shouldCountYouTubeOpen({
+  hadPreviousWindowState,
+  previousWindowWasYouTube,
+  isYouTube
+}) {
+  return Boolean(hadPreviousWindowState) && !previousWindowWasYouTube && Boolean(isYouTube);
+}
+
 export function getDailyGoalNotificationDates(
   previousDailyStats,
   nextDailyStats,
@@ -304,6 +312,67 @@ const EMPTY_DAILY_STATS_ENTRY = {
   watchFocusedTimeMs: 0,
   browseFocusedTimeMs: 0
 };
+
+export function getOpenCountTransitionUpdate({
+  activeState,
+  dailyStats,
+  today,
+  tab,
+  isYouTube
+}) {
+  const nextActiveState = {
+    windows: { ...((activeState && activeState.windows) || {}) },
+    tabs: { ...((activeState && activeState.tabs) || {}) }
+  };
+  const windowKey = tab && typeof tab.windowId === "number"
+    ? String(tab.windowId)
+    : null;
+  const hadPreviousWindowState = Boolean(
+    windowKey &&
+      Object.prototype.hasOwnProperty.call(nextActiveState.windows, windowKey)
+  );
+  const previousWindowWasYouTube = windowKey
+    ? Boolean(nextActiveState.windows[windowKey])
+    : false;
+
+  if (windowKey) {
+    nextActiveState.windows[windowKey] = Boolean(isYouTube);
+  }
+
+  if (tab && typeof tab.id === "number") {
+    nextActiveState.tabs[String(tab.id)] = Boolean(isYouTube);
+  }
+
+  if (
+    !shouldCountYouTubeOpen({
+      hadPreviousWindowState,
+      previousWindowWasYouTube,
+      isYouTube
+    })
+  ) {
+    return {
+      activeState: nextActiveState,
+      dailyStats: dailyStats || {},
+      counted: false,
+      count: null
+    };
+  }
+
+  const nextDailyStats = { ...(dailyStats || {}) };
+  const todayStats = {
+    ...EMPTY_DAILY_STATS_ENTRY,
+    ...(nextDailyStats[today] || {})
+  };
+  todayStats.youtubeOpenCount += 1;
+  nextDailyStats[today] = todayStats;
+
+  return {
+    activeState: nextActiveState,
+    dailyStats: nextDailyStats,
+    counted: true,
+    count: todayStats.youtubeOpenCount
+  };
+}
 
 function getFocusedTimeBucket(pageType) {
   if (pageType === "shorts") return "shortsFocusedTimeMs";
