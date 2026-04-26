@@ -282,10 +282,10 @@ async function incrementActiveYouTubeTimeMsBy1000({ url, pageType, shouldLog }) 
   if (shouldLog) {
     const incrementedBucket =
       pageType === "shorts"
-        ? STORAGE_KEYS.shortsTime
+        ? "shortsFocusedTimeMs"
         : pageType === "watch"
-          ? STORAGE_KEYS.watchTime
-          : STORAGE_KEYS.browseTime;
+          ? "watchFocusedTimeMs"
+          : "browseFocusedTimeMs";
 
     console.log("[YouTube Tracker] Added active YouTube time.", {
       today,
