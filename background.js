@@ -4,7 +4,8 @@
 import {
   applyFocusedYouTubeSessionToDailyStats,
   getTodayDateString,
-  getYouTubePageType
+  getYouTubePageType,
+  pruneDailyStats
 } from "./utils.js";
 
 // Storage keys for daily history.
@@ -281,7 +282,7 @@ async function updateOpenCountForActiveTab(tab, windowId, details) {
     dailyStats[today] = todayStats;
 
     await storageSet({
-      [STORAGE_KEYS.dailyStats]: dailyStats,
+      [STORAGE_KEYS.dailyStats]: pruneDailyStats(dailyStats),
       [STORAGE_KEYS.activeState]: nextActiveState
     });
 
@@ -353,7 +354,7 @@ async function commitStoredActiveSession(now) {
     STORAGE_KEYS.activeState
   ]);
   const activeSession = stored[STORAGE_KEYS.activeSession];
-  const dailyStats = stored[STORAGE_KEYS.dailyStats] || {};
+  const dailyStats = pruneDailyStats(stored[STORAGE_KEYS.dailyStats] || {});
   const activeState = cloneActiveState(stored[STORAGE_KEYS.activeState]);
 
   if (!activeSession) {
@@ -431,9 +432,15 @@ async function syncActiveSession(reason, tabHint, options = {}) {
     : activeState;
 
   if (!activeSession && !nextSession) {
+    const itemsToSet = {
+      [STORAGE_KEYS.dailyStats]: dailyStats
+    };
+
     if (shouldUpdateActiveState && activeTab) {
-      await storageSet({ [STORAGE_KEYS.activeState]: nextActiveState });
+      itemsToSet[STORAGE_KEYS.activeState] = nextActiveState;
     }
+
+    await storageSet(itemsToSet);
     return;
   }
 

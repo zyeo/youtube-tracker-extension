@@ -8,7 +8,8 @@ import {
   formatMsAsHoursMinutes,
   formatMsForTooltip,
   getYouTubePageType,
-  msToDecimalHours
+  msToDecimalHours,
+  pruneDailyStats
 } from "../utils.js";
 
 test("getYouTubePageType classifies YouTube pages", () => {
@@ -108,6 +109,46 @@ test("applyFocusedYouTubeSessionToDailyStats splits sessions across local dates"
     shortsFocusedTimeMs: 0,
     watchFocusedTimeMs: 0,
     browseFocusedTimeMs: 2_000
+  });
+});
+
+test("pruneDailyStats retains entries in the 90-day window", () => {
+  const dailyStats = {
+    "2026-01-27": { youtubeOpenCount: 1 },
+    "2026-04-26": { youtubeOpenCount: 2 }
+  };
+
+  assert.deepEqual(pruneDailyStats(dailyStats, new Date(2026, 3, 26)), dailyStats);
+});
+
+test("pruneDailyStats drops old and malformed date keys", () => {
+  const dailyStats = {
+    "2026-01-26": { youtubeOpenCount: 1 },
+    "2026-01-27": { youtubeOpenCount: 2 },
+    "2026-02-30": { youtubeOpenCount: 3 },
+    notADate: { youtubeOpenCount: 4 }
+  };
+
+  assert.deepEqual(pruneDailyStats(dailyStats, new Date(2026, 3, 26)), {
+    "2026-01-27": { youtubeOpenCount: 2 }
+  });
+});
+
+test("pruneDailyStats preserves fields for retained days", () => {
+  const retainedStats = {
+    youtubeOpenCount: 3,
+    activeYouTubeTimeMs: 4_000,
+    shortsFocusedTimeMs: 1_000,
+    watchFocusedTimeMs: 2_000,
+    browseFocusedTimeMs: 1_000
+  };
+  const dailyStats = {
+    "2026-01-26": { youtubeOpenCount: 1 },
+    "2026-04-26": retainedStats
+  };
+
+  assert.deepEqual(pruneDailyStats(dailyStats, new Date(2026, 3, 26)), {
+    "2026-04-26": retainedStats
   });
 });
 

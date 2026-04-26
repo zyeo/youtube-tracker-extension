@@ -64,6 +64,47 @@ export function getYesterdayDateString() {
   return formatDateString(now);
 }
 
+function isValidDailyStatsDateKey(key) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+/**
+ * Keep dailyStats entries within the recent local-date retention window.
+ * Non-YYYY-MM-DD keys are dropped because dailyStats is keyed by calendar date.
+ * @param {object} dailyStats
+ * @param {Date} asOfDate
+ * @param {number} retentionDays
+ * @returns {object}
+ */
+export function pruneDailyStats(dailyStats, asOfDate = new Date(), retentionDays = 90) {
+  const daysToKeep = Math.max(1, Math.floor(Number(retentionDays) || 90));
+  const today = formatDateString(asOfDate);
+  const cutoffDate = new Date(
+    asOfDate.getFullYear(),
+    asOfDate.getMonth(),
+    asOfDate.getDate() - daysToKeep + 1
+  );
+  const cutoff = formatDateString(cutoffDate);
+  const nextDailyStats = {};
+
+  for (const [dateKey, stats] of Object.entries(dailyStats || {})) {
+    if (isValidDailyStatsDateKey(dateKey) && dateKey >= cutoff && dateKey <= today) {
+      nextDailyStats[dateKey] = stats;
+    }
+  }
+
+  return nextDailyStats;
+}
+
 const EMPTY_DAILY_STATS_ENTRY = {
   youtubeOpenCount: 0,
   activeYouTubeTimeMs: 0,
