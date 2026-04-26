@@ -126,6 +126,10 @@ export function normalizeDailyGoalMinutes(dailyGoalMinutes, defaultValue = 60) {
   );
 }
 
+function isValidSessionPageType(pageType) {
+  return pageType === "shorts" || pageType === "watch" || pageType === "browse";
+}
+
 export function getDailyGoalProgress(focusedTimeMs, dailyGoalMinutes) {
   const normalizedGoalMinutes = normalizeDailyGoalMinutes(dailyGoalMinutes);
   const goalMs = normalizedGoalMinutes * 60_000;
@@ -217,6 +221,80 @@ export function pruneDailyStats(dailyStats, asOfDate = new Date(), retentionDays
   }
 
   return nextDailyStats;
+}
+
+/**
+ * Create a compact session history record from a completed active session.
+ * @param {{startedAt: number, pageType: "shorts"|"watch"|"browse"}} activeSession
+ * @param {number} endedAt
+ * @returns {{startedAt: number, endedAt: number, durationMs: number, pageType: "shorts"|"watch"|"browse"} | null}
+ */
+export function createSessionHistoryRecord(activeSession, endedAt) {
+  const startedAt = Number(activeSession && activeSession.startedAt);
+  const endedAtNumber = Number(endedAt);
+  const pageType = activeSession && activeSession.pageType;
+
+  if (
+    !Number.isFinite(startedAt) ||
+    !Number.isFinite(endedAtNumber) ||
+    endedAtNumber <= startedAt ||
+    !isValidSessionPageType(pageType)
+  ) {
+    return null;
+  }
+
+  return {
+    startedAt,
+    endedAt: endedAtNumber,
+    durationMs: endedAtNumber - startedAt,
+    pageType
+  };
+}
+
+/**
+ * Keep compact session records within the recent local-date retention window.
+ * @param {Array<object>} sessionHistory
+ * @param {Date} asOfDate
+ * @param {number} retentionDays
+ * @returns {Array<object>}
+ */
+export function pruneSessionHistory(
+  sessionHistory,
+  asOfDate = new Date(),
+  retentionDays = 90
+) {
+  const daysToKeep = normalizeRetentionDays(retentionDays);
+  const cutoffMs = new Date(
+    asOfDate.getFullYear(),
+    asOfDate.getMonth(),
+    asOfDate.getDate() - daysToKeep + 1
+  ).getTime();
+  const nextDayStartMs = new Date(
+    asOfDate.getFullYear(),
+    asOfDate.getMonth(),
+    asOfDate.getDate() + 1
+  ).getTime();
+
+  if (!Array.isArray(sessionHistory)) {
+    return [];
+  }
+
+  return sessionHistory.filter((record) => {
+    const startedAt = Number(record && record.startedAt);
+    const endedAt = Number(record && record.endedAt);
+    const durationMs = Number(record && record.durationMs);
+
+    return (
+      Number.isFinite(startedAt) &&
+      Number.isFinite(endedAt) &&
+      Number.isFinite(durationMs) &&
+      endedAt > startedAt &&
+      durationMs === endedAt - startedAt &&
+      isValidSessionPageType(record.pageType) &&
+      endedAt >= cutoffMs &&
+      endedAt < nextDayStartMs
+    );
+  });
 }
 
 const EMPTY_DAILY_STATS_ENTRY = {

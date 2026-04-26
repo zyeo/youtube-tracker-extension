@@ -3,18 +3,21 @@
 
 import {
   applyFocusedYouTubeSessionToDailyStats,
+  createSessionHistoryRecord,
   getDailyGoalNotificationDates,
   getTodayDateString,
   normalizeDailyGoalMinutes,
   normalizeRetentionDays,
   getYouTubePageType,
-  pruneDailyStats
+  pruneDailyStats,
+  pruneSessionHistory
 } from "./utils.js";
 
 // Storage keys for daily history.
 const STORAGE_KEYS = {
   dailyStats: "dailyStats",
   activeSession: "activeSession",
+  sessionHistory: "sessionHistory",
   activeState: "activeState",
   retentionDays: "retentionDays",
   dailyGoalMinutes: "dailyGoalMinutes",
@@ -452,6 +455,7 @@ async function commitStoredActiveSession(now) {
   const stored = await storageGet([
     STORAGE_KEYS.dailyStats,
     STORAGE_KEYS.activeSession,
+    STORAGE_KEYS.sessionHistory,
     STORAGE_KEYS.activeState,
     STORAGE_KEYS.retentionDays,
     STORAGE_KEYS.dailyGoalMinutes,
@@ -468,6 +472,11 @@ async function commitStoredActiveSession(now) {
     retentionDays
   );
   const activeState = cloneActiveState(stored[STORAGE_KEYS.activeState]);
+  const sessionHistory = pruneSessionHistory(
+    stored[STORAGE_KEYS.sessionHistory] || [],
+    new Date(now),
+    retentionDays
+  );
   const dailyGoalNotifications = pruneDailyStats(
     stored[STORAGE_KEYS.dailyGoalNotifications] || {},
     new Date(now),
@@ -478,6 +487,7 @@ async function commitStoredActiveSession(now) {
     return {
       dailyStats,
       activeState,
+      sessionHistory,
       activeSession: null,
       committedElapsedMs: 0,
       ignoredStaleGapMs: 0,
@@ -494,6 +504,7 @@ async function commitStoredActiveSession(now) {
     return {
       dailyStats,
       activeState,
+      sessionHistory,
       activeSession,
       committedElapsedMs: 0,
       ignoredStaleGapMs: 0,
@@ -508,6 +519,7 @@ async function commitStoredActiveSession(now) {
     return {
       dailyStats,
       activeState,
+      sessionHistory,
       activeSession,
       committedElapsedMs: 0,
       ignoredStaleGapMs: elapsedMs,
@@ -538,6 +550,7 @@ async function commitStoredActiveSession(now) {
   return {
     dailyStats: nextDailyStats,
     activeState,
+    sessionHistory,
     activeSession,
     committedElapsedMs: elapsedMs,
     ignoredStaleGapMs: 0,
@@ -558,6 +571,7 @@ async function syncActiveSession(reason, tabHint, options = {}) {
   const {
     dailyStats,
     activeState,
+    sessionHistory,
     activeSession,
     committedElapsedMs,
     ignoredStaleGapMs,
@@ -566,13 +580,34 @@ async function syncActiveSession(reason, tabHint, options = {}) {
     dailyGoalMinutes
   } = await commitStoredActiveSession(now);
   const shouldUpdateActiveState = !options.skipActiveStateUpdate;
+  const continueSession = shouldContinueSession(
+    activeSession,
+    nextSession,
+    ignoredStaleGapMs
+  );
   const nextActiveState = shouldUpdateActiveState && activeTab
     ? updateActiveStateForTab(activeState, activeTab, Boolean(pageType))
     : activeState;
+  let nextSessionHistory = sessionHistory;
+
+  if (activeSession && !continueSession) {
+    const completedSessionEndedAt = ignoredStaleGapMs
+      ? Number(activeSession.lastCommittedAt ?? activeSession.startedAt)
+      : now;
+    const completedSessionRecord = createSessionHistoryRecord(
+      activeSession,
+      completedSessionEndedAt
+    );
+
+    if (completedSessionRecord) {
+      nextSessionHistory = [...sessionHistory, completedSessionRecord];
+    }
+  }
 
   if (!activeSession && !nextSession) {
     const itemsToSet = {
       [STORAGE_KEYS.dailyStats]: dailyStats,
+      [STORAGE_KEYS.sessionHistory]: nextSessionHistory,
       [STORAGE_KEYS.dailyGoalNotifications]: dailyGoalNotifications
     };
 
@@ -584,13 +619,14 @@ async function syncActiveSession(reason, tabHint, options = {}) {
     return createLiveStatus(activeTab, null);
   }
 
-  if (shouldContinueSession(activeSession, nextSession, ignoredStaleGapMs)) {
+  if (continueSession) {
     nextSession.startedAt = activeSession.startedAt;
   }
 
   const itemsToSet = {
     [STORAGE_KEYS.dailyStats]: dailyStats,
     [STORAGE_KEYS.activeSession]: nextSession,
+    [STORAGE_KEYS.sessionHistory]: nextSessionHistory,
     [STORAGE_KEYS.dailyGoalNotifications]: dailyGoalNotifications
   };
 

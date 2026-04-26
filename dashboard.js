@@ -6,8 +6,86 @@ import {
   formatMsAsHoursMinutes,
   formatMsForTooltip,
   getTodayDateString,
+  getYouTubePageTypeLabel,
   msToDecimalHours
 } from "./utils.js";
+
+const RECENT_SESSIONS_LIMIT = 5;
+
+function formatSessionTimestamp(timestamp) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(timestamp));
+}
+
+function renderRecentSessions(sessionHistory) {
+  const recentSessionsList = document.getElementById("recent-sessions-list");
+  const recentSessionsSummary = document.getElementById("recent-sessions-summary");
+
+  if (!recentSessionsList || !recentSessionsSummary) {
+    return;
+  }
+
+  recentSessionsList.textContent = "";
+
+  if (!sessionHistory.length) {
+    recentSessionsSummary.textContent = "No completed YouTube sessions yet.";
+    const emptyItem = document.createElement("li");
+    emptyItem.className = "recent-session-empty";
+    emptyItem.textContent = "No completed YouTube sessions yet.";
+    recentSessionsList.append(emptyItem);
+    return;
+  }
+
+  const recentSessions = [...sessionHistory]
+    .sort((sessionA, sessionB) => Number(sessionB.endedAt) - Number(sessionA.endedAt))
+    .slice(0, RECENT_SESSIONS_LIMIT);
+  const recentSessionsTotalMs = recentSessions.reduce(
+    (sum, session) => sum + Math.max(0, Number(session.durationMs) || 0),
+    0
+  );
+
+  recentSessionsSummary.textContent = `${recentSessions.length} recent sessions, ${formatMsAsHoursMinutes(
+    recentSessionsTotalMs
+  )} total.`;
+
+  recentSessions.forEach((session) => {
+    const item = document.createElement("li");
+    item.className = "recent-session-item";
+
+    const topRow = document.createElement("div");
+    topRow.className = "recent-session-row";
+
+    const pageType = document.createElement("span");
+    pageType.className = "recent-session-page-type";
+    pageType.textContent = getYouTubePageTypeLabel(session.pageType) || "YouTube";
+
+    const duration = document.createElement("span");
+    duration.className = "recent-session-duration";
+    duration.textContent = formatMsAsHoursMinutes(session.durationMs);
+
+    topRow.append(pageType, duration);
+
+    const bottomRow = document.createElement("div");
+    bottomRow.className = "recent-session-row";
+
+    const startedAt = Number(session.startedAt);
+    const endedAt = Number(session.endedAt);
+    const timeRange = document.createElement("span");
+    timeRange.className = "recent-session-time";
+    timeRange.textContent = `${formatSessionTimestamp(startedAt)} to ${formatSessionTimestamp(
+      endedAt
+    )}`;
+
+    bottomRow.append(timeRange);
+
+    item.append(topRow, bottomRow);
+    recentSessionsList.append(item);
+  });
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   const summaryOpens = document.getElementById("summary-opens");
@@ -17,13 +95,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const summaryBrowse = document.getElementById("summary-browse");
   const weeklySummary = document.getElementById("weekly-summary");
 
-  chrome.storage.local.get(["dailyStats"], (data) => {
+  chrome.storage.local.get(["dailyStats", "sessionHistory"], (data) => {
     const dailyStats = data.dailyStats || {};
+    const sessionHistory = Array.isArray(data.sessionHistory) ? data.sessionHistory : [];
     const entries = Object.entries(dailyStats);
-
-    if (!entries.length) {
-      return;
-    }
+    renderRecentSessions(sessionHistory);
 
     // Sort dates ascending.
     entries.sort(([dateA], [dateB]) => (dateA < dateB ? -1 : dateA > dateB ? 1 : 0));

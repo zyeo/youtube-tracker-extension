@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyFocusedYouTubeSessionToDailyStats,
+  createSessionHistoryRecord,
   formatDateString,
   formatMsAsClock,
   formatMsAsHoursMinutes,
@@ -16,6 +17,7 @@ import {
   normalizeDailyGoalMinutes,
   normalizeRetentionDays,
   pruneDailyStats,
+  pruneSessionHistory,
   shouldNotifyDailyGoalExceeded
 } from "../utils.js";
 
@@ -267,6 +269,124 @@ test("pruneDailyStats preserves fields for retained days", () => {
   assert.deepEqual(pruneDailyStats(dailyStats, new Date(2026, 3, 26)), {
     "2026-04-26": retainedStats
   });
+});
+
+test("createSessionHistoryRecord returns a compact completed session record", () => {
+  assert.deepEqual(
+    createSessionHistoryRecord(
+      {
+        startedAt: new Date(2026, 3, 26, 10, 0, 0).getTime(),
+        pageType: "watch",
+        url: "https://www.youtube.com/watch?v=abc123"
+      },
+      new Date(2026, 3, 26, 10, 5, 0).getTime()
+    ),
+    {
+      startedAt: new Date(2026, 3, 26, 10, 0, 0).getTime(),
+      endedAt: new Date(2026, 3, 26, 10, 5, 0).getTime(),
+      durationMs: 5 * 60_000,
+      pageType: "watch"
+    }
+  );
+});
+
+test("createSessionHistoryRecord rejects invalid sessions", () => {
+  assert.equal(
+    createSessionHistoryRecord(
+      {
+        startedAt: new Date(2026, 3, 26, 10, 0, 0).getTime(),
+        pageType: "watch"
+      },
+      new Date(2026, 3, 26, 10, 0, 0).getTime()
+    ),
+    null
+  );
+  assert.equal(
+    createSessionHistoryRecord(
+      {
+        startedAt: new Date(2026, 3, 26, 10, 0, 0).getTime(),
+        pageType: "channel"
+      },
+      new Date(2026, 3, 26, 10, 5, 0).getTime()
+    ),
+    null
+  );
+});
+
+test("pruneSessionHistory retains records in the local retention window", () => {
+  const retainedHistory = [
+    {
+      startedAt: new Date(2026, 3, 20, 10, 0, 0).getTime(),
+      endedAt: new Date(2026, 3, 20, 10, 15, 0).getTime(),
+      durationMs: 15 * 60_000,
+      pageType: "browse"
+    },
+    {
+      startedAt: new Date(2026, 3, 26, 10, 0, 0).getTime(),
+      endedAt: new Date(2026, 3, 26, 10, 5, 0).getTime(),
+      durationMs: 5 * 60_000,
+      pageType: "watch"
+    }
+  ];
+
+  assert.deepEqual(
+    pruneSessionHistory(retainedHistory, new Date(2026, 3, 26), 7),
+    retainedHistory
+  );
+});
+
+test("pruneSessionHistory drops old and malformed records", () => {
+  assert.deepEqual(
+    pruneSessionHistory(
+      [
+        {
+          startedAt: new Date(2026, 3, 19, 23, 59, 0).getTime(),
+          endedAt: new Date(2026, 3, 19, 23, 59, 30).getTime(),
+          durationMs: 30_000,
+          pageType: "watch"
+        },
+        {
+          startedAt: new Date(2026, 3, 20, 0, 0, 0).getTime(),
+          endedAt: new Date(2026, 3, 20, 0, 10, 0).getTime(),
+          durationMs: 10 * 60_000,
+          pageType: "shorts"
+        },
+        {
+          startedAt: new Date(2026, 3, 26, 11, 0, 0).getTime(),
+          durationMs: 2 * 60_000,
+          pageType: "browse"
+        },
+        {
+          startedAt: new Date(2026, 3, 26, 12, 0, 0).getTime(),
+          endedAt: new Date(2026, 3, 26, 12, 5, 0).getTime(),
+          durationMs: 5 * 60_000,
+          pageType: "channel"
+        },
+        {
+          startedAt: new Date(2026, 3, 26, 13, 0, 0).getTime(),
+          endedAt: new Date(2026, 3, 26, 13, 5, 0).getTime(),
+          durationMs: 1_000,
+          pageType: "browse"
+        },
+        {
+          startedAt: "bad",
+          endedAt: "bad",
+          durationMs: 1_000,
+          pageType: "watch"
+        }
+      ],
+      new Date(2026, 3, 26),
+      7
+    ),
+    [
+      {
+        startedAt: new Date(2026, 3, 20, 0, 0, 0).getTime(),
+        endedAt: new Date(2026, 3, 20, 0, 10, 0).getTime(),
+        durationMs: 10 * 60_000,
+        pageType: "shorts"
+      }
+    ]
+  );
 });
 
 test("formatMsAsClock formats durations below and above an hour", () => {
