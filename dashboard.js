@@ -1,6 +1,14 @@
 // dashboard.js - YouTube Tracker
 // Renders simple charts for the last 7 days using Chart.js.
 
+import {
+  formatMsAsClock,
+  formatMsAsHoursMinutes,
+  formatMsForTooltip,
+  getTodayDateString,
+  msToDecimalHours
+} from "./utils.js";
+
 document.addEventListener("DOMContentLoaded", () => {
   const summaryOpens = document.getElementById("summary-opens");
   const summaryFocused = document.getElementById("summary-focused");
@@ -8,53 +16,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const summaryWatch = document.getElementById("summary-watch");
   const summaryBrowse = document.getElementById("summary-browse");
   const weeklySummary = document.getElementById("weekly-summary");
-
-  function getTodayDateString() {
-    const now = new Date();
-    const yyyy = String(now.getFullYear());
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function formatMsAsClock(ms) {
-    const totalSeconds = Math.floor(Number(ms ?? 0) / 1000);
-    const seconds = totalSeconds % 60;
-    const minutesTotal = Math.floor(totalSeconds / 60);
-
-    if (minutesTotal < 60) {
-      const mm = String(minutesTotal).padStart(2, "0");
-      const ss = String(seconds).padStart(2, "0");
-      return `${mm}:${ss}`;
-    }
-
-    const hh = String(Math.floor(minutesTotal / 60)).padStart(2, "0");
-    const mm = String(minutesTotal % 60).padStart(2, "0");
-    const ss = String(seconds).padStart(2, "0");
-    return `${hh}:${mm}:${ss}`;
-  }
-
-  function msToDecimalHours(ms) {
-    return Math.round((Number(ms ?? 0) / 3600000) * 100) / 100;
-  }
-
-  function formatMsForTooltip(ms) {
-    const totalMinutes = Math.floor(Number(ms ?? 0) / 60000);
-    if (totalMinutes < 60) {
-      return `${totalMinutes}m`;
-    }
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}h ${minutes}m`;
-  }
-
-  function formatMsAsHoursMinutes(ms) {
-    const totalMinutes = Math.floor(Number(ms ?? 0) / 60000);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours === 0) return `${minutes}m`;
-    return `${hours}h ${minutes}m`;
-  }
 
   chrome.storage.local.get(["dailyStats"], (data) => {
     const dailyStats = data.dailyStats || {};
@@ -269,4 +230,3 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
-

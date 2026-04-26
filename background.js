@@ -1,67 +1,12 @@
 // background.js - YouTube Tracker (Manifest V3 service worker)
 // Listens for tab updates/activation and logs basic info for YouTube URLs.
 
+import { getTodayDateString, getYouTubePageType } from "./utils.js";
+
 // Storage keys for daily history.
 const STORAGE_KEYS = {
   dailyStats: "dailyStats"
 };
-
-/**
- * Determine YouTube page type based on URL.
- * - "shorts" for youtube.com/shorts/*
- * - "watch" for youtube.com/watch*
- * - "browse" for other youtube.com pages (home, subscriptions, search, etc.)
- * - null for non-YouTube URLs
- * @param {string} url
- * @returns {"shorts" | "watch" | "browse" | null}
- */
-function getYouTubePageType(url) {
-  if (!url) return null;
-
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname || "";
-    const path = parsed.pathname || "";
-
-    // Check YouTube host
-    const isYouTubeHost =
-      host === "www.youtube.com" ||
-      host === "youtube.com" ||
-      host === "m.youtube.com";
-
-    if (!isYouTubeHost) {
-      return null;
-    }
-
-    // Shorts: /shorts/...
-    if (path.startsWith("/shorts/")) {
-      return "shorts";
-    }
-
-    // Regular watch page: /watch
-    if (path.startsWith("/watch")) {
-      return "watch";
-    }
-
-    // Other YouTube pages (home, subscriptions, search, etc.)
-    return "browse";
-  } catch (e) {
-    // If URL parsing fails, treat as non-YouTube
-    return null;
-  }
-}
-
-/**
- * Format today's date as YYYY-MM-DD in local time.
- * @returns {string}
- */
-function getTodayDateString() {
-  const now = new Date();
-  const yyyy = String(now.getFullYear());
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 /**
  * Promise wrappers for chrome.storage.local (keeps code readable).
@@ -354,4 +299,3 @@ function startActiveTimeInterval() {
 }
 
 startActiveTimeInterval();
-

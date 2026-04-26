@@ -1,6 +1,12 @@
 // popup.js - YouTube Tracker
 // Shows today's metrics from chrome.storage.local dailyStats history.
 
+import {
+  formatMsAsClock,
+  getTodayDateString,
+  getYesterdayDateString
+} from "./utils.js";
+
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[YouTube Tracker] Popup loaded.");
 
@@ -16,42 +22,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const STORAGE_KEYS = {
     dailyStats: "dailyStats"
   };
-
-  function getTodayDateString() {
-    const now = new Date();
-    const yyyy = String(now.getFullYear());
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function formatMsAsClock(ms) {
-    const totalSeconds = Math.floor(Number(ms ?? 0) / 1000);
-    const seconds = totalSeconds % 60;
-    const minutesTotal = Math.floor(totalSeconds / 60);
-
-    if (minutesTotal < 60) {
-      // Under 1 hour: MM:SS
-      const mm = String(minutesTotal).padStart(2, "0");
-      const ss = String(seconds).padStart(2, "0");
-      return `${mm}:${ss}`;
-    }
-
-    // 1 hour or more: HH:MM:SS
-    const hh = String(Math.floor(minutesTotal / 60)).padStart(2, "0");
-    const mm = String(minutesTotal % 60).padStart(2, "0");
-    const ss = String(seconds).padStart(2, "0");
-    return `${hh}:${mm}:${ss}`;
-  }
-
-  function getYesterdayDateString() {
-    const now = new Date();
-    now.setDate(now.getDate() - 1);
-    const yyyy = String(now.getFullYear());
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
 
   function getVsYesterdayComparison(todayValue, yesterdayValue) {
     const today = Number(todayValue ?? 0);
@@ -148,4 +118,3 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
-
