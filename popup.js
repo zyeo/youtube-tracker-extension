@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const timeComparisonEl = document.getElementById("timeComparison");
   const opensComparisonEl = document.getElementById("opensComparison");
   const openDashboardBtn = document.getElementById("openDashboard");
+  const openOptionsBtn = document.getElementById("openOptions");
 
   const STORAGE_KEYS = {
     dailyStats: "dailyStats"
@@ -148,6 +149,18 @@ document.addEventListener("DOMContentLoaded", () => {
   if (openDashboardBtn) {
     openDashboardBtn.addEventListener("click", () => {
       const url = chrome.runtime.getURL("dashboard.html");
+      chrome.tabs.create({ url });
+    });
+  }
+
+  if (openOptionsBtn) {
+    openOptionsBtn.addEventListener("click", () => {
+      if (chrome.runtime.openOptionsPage) {
+        chrome.runtime.openOptionsPage();
+        return;
+      }
+
+      const url = chrome.runtime.getURL("options.html");
       chrome.tabs.create({ url });
     });
   }
