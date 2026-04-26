@@ -16,6 +16,7 @@ const STORAGE_KEYS = {
 const ACTIVE_SESSION_ALARM_NAME = "active-session-commit";
 const ACTIVE_SESSION_ALARM_PERIOD_MINUTES = 1;
 const STALE_SESSION_GAP_MS = 5 * 60 * 1000;
+const YOUTUBE_ROUTE_CHANGED_MESSAGE = "youtube-route-changed";
 
 /**
  * Promise wrappers for chrome.storage.local (keeps code readable).
@@ -301,6 +302,27 @@ function enqueueOpenCountUpdate(tab, windowId, details) {
   enqueueStorageOperation(() => updateOpenCountForActiveTab(tab, windowId, details));
 }
 
+function createTabHintFromRouteMessage(senderTab, url) {
+  if (
+    !senderTab ||
+    typeof senderTab.id !== "number" ||
+    typeof senderTab.windowId !== "number" ||
+    !url
+  ) {
+    return null;
+  }
+
+  const pageType = getYouTubePageType(url);
+  if (!pageType) {
+    return null;
+  }
+
+  return {
+    ...senderTab,
+    url
+  };
+}
+
 function createActiveSession(tab, pageType, now) {
   return {
     tabId: tab.id,
@@ -442,6 +464,20 @@ async function syncActiveSession(reason, tabHint, options = {}) {
 function enqueueActiveSessionSync(reason, tabHint, options) {
   enqueueStorageOperation(() => syncActiveSession(reason, tabHint, options));
 }
+
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (!message || message.type !== YOUTUBE_ROUTE_CHANGED_MESSAGE) {
+    return;
+  }
+
+  const tabHint = createTabHintFromRouteMessage(sender && sender.tab, message.url);
+  if (!tabHint) {
+    return;
+  }
+
+  isYouTubeByTabId.set(tabHint.id, true);
+  enqueueActiveSessionSync("YouTube SPA route changed", tabHint);
+});
 
 function startActiveSessionAlarm() {
   if (!chrome.alarms) return;
