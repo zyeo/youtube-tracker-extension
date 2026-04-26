@@ -139,6 +139,58 @@ export function getDailyGoalProgress(focusedTimeMs, dailyGoalMinutes) {
   };
 }
 
+export function shouldNotifyDailyGoalExceeded(
+  previousMs,
+  nextMs,
+  goalMinutes,
+  alreadyNotified
+) {
+  if (alreadyNotified) {
+    return false;
+  }
+
+  const goalMs = normalizeDailyGoalMinutes(goalMinutes) * 60_000;
+  const previousFocusedMs = Math.max(0, Number(previousMs) || 0);
+  const nextFocusedMs = Math.max(0, Number(nextMs) || 0);
+
+  return previousFocusedMs < goalMs && nextFocusedMs >= goalMs;
+}
+
+export function getDailyGoalNotificationDates(
+  previousDailyStats,
+  nextDailyStats,
+  goalMinutes,
+  notifiedDates
+) {
+  const dates = new Set([
+    ...Object.keys(previousDailyStats || {}),
+    ...Object.keys(nextDailyStats || {})
+  ]);
+  const nextNotificationDates = [];
+
+  for (const dateKey of dates) {
+    const previousMs = previousDailyStats?.[dateKey]?.activeYouTubeTimeMs || 0;
+    const nextMs = nextDailyStats?.[dateKey]?.activeYouTubeTimeMs || 0;
+    const notificationState = notifiedDates && notifiedDates[dateKey];
+    const alreadyNotified = notificationState === true;
+
+    if (
+      notificationState === "pending" &&
+      !alreadyNotified &&
+      Math.max(0, Number(nextMs) || 0) >= normalizeDailyGoalMinutes(goalMinutes) * 60_000
+    ) {
+      nextNotificationDates.push(dateKey);
+      continue;
+    }
+
+    if (shouldNotifyDailyGoalExceeded(previousMs, nextMs, goalMinutes, alreadyNotified)) {
+      nextNotificationDates.push(dateKey);
+    }
+  }
+
+  return nextNotificationDates.sort();
+}
+
 /**
  * Keep dailyStats entries within the recent local-date retention window.
  * Non-YYYY-MM-DD keys are dropped because dailyStats is keyed by calendar date.

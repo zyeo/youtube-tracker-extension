@@ -8,13 +8,15 @@ import {
   formatMsAsHoursMinutes,
   formatMsForTooltip,
   getDailyGoalProgress,
+  getDailyGoalNotificationDates,
   getElapsedSessionMs,
   getYouTubePageType,
   getYouTubePageTypeLabel,
   msToDecimalHours,
   normalizeDailyGoalMinutes,
   normalizeRetentionDays,
-  pruneDailyStats
+  pruneDailyStats,
+  shouldNotifyDailyGoalExceeded
 } from "../utils.js";
 
 test("getYouTubePageType classifies YouTube pages", () => {
@@ -169,6 +171,58 @@ test("getDailyGoalProgress calculates unclamped text and clamped bar progress", 
     progressPct: 0,
     clampedProgressPct: 0
   });
+});
+
+test("shouldNotifyDailyGoalExceeded only fires on the first crossing", () => {
+  assert.equal(
+    shouldNotifyDailyGoalExceeded(59 * 60_000, 60 * 60_000, 60, false),
+    true
+  );
+  assert.equal(
+    shouldNotifyDailyGoalExceeded(60 * 60_000, 61 * 60_000, 60, false),
+    false
+  );
+  assert.equal(
+    shouldNotifyDailyGoalExceeded(30 * 60_000, 59 * 60_000, 60, false),
+    false
+  );
+  assert.equal(
+    shouldNotifyDailyGoalExceeded(59 * 60_000, 61 * 60_000, 60, true),
+    false
+  );
+  assert.equal(
+    shouldNotifyDailyGoalExceeded(-1, 60 * 60_000, 0, false),
+    true
+  );
+});
+
+test("getDailyGoalNotificationDates finds same-day and cross-midnight crossings", () => {
+  const previousDailyStats = {
+    "2026-04-25": { activeYouTubeTimeMs: 59 * 60_000 },
+    "2026-04-26": { activeYouTubeTimeMs: 10 * 60_000 }
+  };
+  const nextDailyStats = {
+    "2026-04-25": { activeYouTubeTimeMs: 60 * 60_000 },
+    "2026-04-26": { activeYouTubeTimeMs: 61 * 60_000 }
+  };
+
+  assert.deepEqual(
+    getDailyGoalNotificationDates(previousDailyStats, nextDailyStats, 60, {}),
+    ["2026-04-25", "2026-04-26"]
+  );
+  assert.deepEqual(
+    getDailyGoalNotificationDates(previousDailyStats, nextDailyStats, 60, {
+      "2026-04-25": true
+    }),
+    ["2026-04-26"]
+  );
+  assert.deepEqual(
+    getDailyGoalNotificationDates(nextDailyStats, nextDailyStats, 60, {
+      "2026-04-25": "pending",
+      "2026-04-26": true
+    }),
+    ["2026-04-25"]
+  );
 });
 
 test("pruneDailyStats drops old and malformed date keys", () => {

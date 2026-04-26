@@ -5,6 +5,7 @@
   "description": "Minimal YouTube usage tracker (initial slice).",
   "permissions": [
     "alarms",
+    "notifications",
     "tabs",
     "windows",
     "storage"

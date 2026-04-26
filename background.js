@@ -3,7 +3,9 @@
 
 import {
   applyFocusedYouTubeSessionToDailyStats,
+  getDailyGoalNotificationDates,
   getTodayDateString,
+  normalizeDailyGoalMinutes,
   normalizeRetentionDays,
   getYouTubePageType,
   pruneDailyStats
@@ -14,13 +16,17 @@ const STORAGE_KEYS = {
   dailyStats: "dailyStats",
   activeSession: "activeSession",
   activeState: "activeState",
-  retentionDays: "retentionDays"
+  retentionDays: "retentionDays",
+  dailyGoalMinutes: "dailyGoalMinutes",
+  dailyGoalNotifications: "dailyGoalNotifications"
 };
 const ACTIVE_SESSION_ALARM_NAME = "active-session-commit";
 const ACTIVE_SESSION_ALARM_PERIOD_MINUTES = 1;
 const STALE_SESSION_GAP_MS = 5 * 60 * 1000;
 const YOUTUBE_ROUTE_CHANGED_MESSAGE = "youtube-route-changed";
 const SYNC_ACTIVE_SESSION_MESSAGE = "sync-active-session";
+const NOTIFICATION_ICON_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+tm0YAAAAASUVORK5CYII=";
 
 /**
  * Promise wrappers for chrome.storage.local (keeps code readable).
@@ -30,6 +36,35 @@ function storageGet(keys) {
 }
 function storageSet(items) {
   return new Promise((resolve) => chrome.storage.local.set(items, resolve));
+}
+
+function createDailyGoalExceededNotification(dateKey, goalMinutes) {
+  if (!chrome.notifications || typeof chrome.notifications.create !== "function") {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    chrome.notifications.create(
+      `daily-goal-exceeded-${dateKey}`,
+      {
+        type: "basic",
+        iconUrl: NOTIFICATION_ICON_URL,
+        title: "Daily YouTube goal reached",
+        message: `You have exceeded your ${goalMinutes}-minute YouTube goal for ${dateKey}.`
+      },
+      (notificationId) => {
+        if (chrome.runtime.lastError) {
+          console.warn(
+            "[YouTube Tracker] Failed to create daily goal notification.",
+            chrome.runtime.lastError.message
+          );
+          resolve(false);
+          return;
+        }
+        resolve(Boolean(notificationId));
+      }
+    );
+  });
 }
 
 async function getRetentionDays() {
@@ -418,16 +453,26 @@ async function commitStoredActiveSession(now) {
     STORAGE_KEYS.dailyStats,
     STORAGE_KEYS.activeSession,
     STORAGE_KEYS.activeState,
-    STORAGE_KEYS.retentionDays
+    STORAGE_KEYS.retentionDays,
+    STORAGE_KEYS.dailyGoalMinutes,
+    STORAGE_KEYS.dailyGoalNotifications
   ]);
   const activeSession = stored[STORAGE_KEYS.activeSession];
   const retentionDays = normalizeRetentionDays(stored[STORAGE_KEYS.retentionDays]);
+  const dailyGoalMinutes = normalizeDailyGoalMinutes(
+    stored[STORAGE_KEYS.dailyGoalMinutes]
+  );
   const dailyStats = pruneDailyStats(
     stored[STORAGE_KEYS.dailyStats] || {},
     new Date(now),
     retentionDays
   );
   const activeState = cloneActiveState(stored[STORAGE_KEYS.activeState]);
+  const dailyGoalNotifications = pruneDailyStats(
+    stored[STORAGE_KEYS.dailyGoalNotifications] || {},
+    new Date(now),
+    retentionDays
+  );
 
   if (!activeSession) {
     return {
@@ -435,7 +480,9 @@ async function commitStoredActiveSession(now) {
       activeState,
       activeSession: null,
       committedElapsedMs: 0,
-      ignoredStaleGapMs: 0
+      ignoredStaleGapMs: 0,
+      dailyGoalNotifications,
+      dailyGoalNotificationDates: []
     };
   }
 
@@ -449,7 +496,9 @@ async function commitStoredActiveSession(now) {
       activeState,
       activeSession,
       committedElapsedMs: 0,
-      ignoredStaleGapMs: 0
+      ignoredStaleGapMs: 0,
+      dailyGoalNotifications,
+      dailyGoalNotificationDates: []
     };
   }
 
@@ -461,7 +510,9 @@ async function commitStoredActiveSession(now) {
       activeState,
       activeSession,
       committedElapsedMs: 0,
-      ignoredStaleGapMs: elapsedMs
+      ignoredStaleGapMs: elapsedMs,
+      dailyGoalNotifications,
+      dailyGoalNotificationDates: []
     };
   }
 
@@ -473,13 +524,26 @@ async function commitStoredActiveSession(now) {
       endedAt: now
     }
   );
+  const dailyGoalNotificationDates = getDailyGoalNotificationDates(
+    dailyStats,
+    nextDailyStats,
+    dailyGoalMinutes,
+    dailyGoalNotifications
+  );
+
+  for (const dateKey of dailyGoalNotificationDates) {
+    dailyGoalNotifications[dateKey] = "pending";
+  }
 
   return {
     dailyStats: nextDailyStats,
     activeState,
     activeSession,
     committedElapsedMs: elapsedMs,
-    ignoredStaleGapMs: 0
+    ignoredStaleGapMs: 0,
+    dailyGoalNotifications,
+    dailyGoalNotificationDates,
+    dailyGoalMinutes
   };
 }
 
@@ -496,7 +560,10 @@ async function syncActiveSession(reason, tabHint, options = {}) {
     activeState,
     activeSession,
     committedElapsedMs,
-    ignoredStaleGapMs
+    ignoredStaleGapMs,
+    dailyGoalNotifications,
+    dailyGoalNotificationDates,
+    dailyGoalMinutes
   } = await commitStoredActiveSession(now);
   const shouldUpdateActiveState = !options.skipActiveStateUpdate;
   const nextActiveState = shouldUpdateActiveState && activeTab
@@ -505,7 +572,8 @@ async function syncActiveSession(reason, tabHint, options = {}) {
 
   if (!activeSession && !nextSession) {
     const itemsToSet = {
-      [STORAGE_KEYS.dailyStats]: dailyStats
+      [STORAGE_KEYS.dailyStats]: dailyStats,
+      [STORAGE_KEYS.dailyGoalNotifications]: dailyGoalNotifications
     };
 
     if (shouldUpdateActiveState && activeTab) {
@@ -522,7 +590,8 @@ async function syncActiveSession(reason, tabHint, options = {}) {
 
   const itemsToSet = {
     [STORAGE_KEYS.dailyStats]: dailyStats,
-    [STORAGE_KEYS.activeSession]: nextSession
+    [STORAGE_KEYS.activeSession]: nextSession,
+    [STORAGE_KEYS.dailyGoalNotifications]: dailyGoalNotifications
   };
 
   if (shouldUpdateActiveState) {
@@ -530,6 +599,20 @@ async function syncActiveSession(reason, tabHint, options = {}) {
   }
 
   await storageSet(itemsToSet);
+
+  for (const dateKey of dailyGoalNotificationDates) {
+    const didNotify = await createDailyGoalExceededNotification(
+      dateKey,
+      dailyGoalMinutes
+    );
+
+    if (didNotify) {
+      dailyGoalNotifications[dateKey] = true;
+      await storageSet({
+        [STORAGE_KEYS.dailyGoalNotifications]: dailyGoalNotifications
+      });
+    }
+  }
 
   console.log("[YouTube Tracker] Synced active YouTube session.", {
     reason,
