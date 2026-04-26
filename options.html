@@ -9,15 +9,26 @@
     <main class="options-container">
       <header class="options-header">
         <h1 class="options-title">YouTube Tracker Options</h1>
-        <p class="options-subtitle">Configure local data retention for daily history.</p>
+        <p class="options-subtitle">Configure your daily goal and local history retention.</p>
       </header>
 
-      <section class="options-card" aria-labelledby="retention-title">
-        <h2 id="retention-title" class="options-card-title">Daily history retention</h2>
+      <section class="options-card" aria-labelledby="settings-title">
+        <h2 id="settings-title" class="options-card-title">Tracking settings</h2>
         <p class="options-card-text">
-          Choose how many days of daily stats to keep in local storage.
+          Configure your daily time goal and how long local daily history is kept.
         </p>
-        <form id="retention-form">
+        <form id="settings-form" class="options-form">
+          <label for="daily-goal-minutes">Daily goal (minutes)</label>
+          <input
+            id="daily-goal-minutes"
+            name="dailyGoalMinutes"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            required
+          />
+
           <label for="retention-days">Retention days</label>
           <input
             id="retention-days"

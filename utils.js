@@ -97,6 +97,41 @@ export function normalizeRetentionDays(retentionDays, defaultValue = 90) {
   );
 }
 
+export function normalizeDailyGoalMinutes(dailyGoalMinutes, defaultValue = 60) {
+  const defaultNumber = Number(defaultValue);
+  const normalizedDefault = Math.max(
+    1,
+    Math.floor(Number.isFinite(defaultNumber) ? defaultNumber : 60)
+  );
+
+  if (dailyGoalMinutes === null || String(dailyGoalMinutes).trim() === "") {
+    return normalizedDefault;
+  }
+
+  const dailyGoalNumber = Number(dailyGoalMinutes);
+  if (!Number.isFinite(dailyGoalNumber) || dailyGoalNumber <= 0) {
+    return normalizedDefault;
+  }
+
+  return Math.max(
+    1,
+    Math.floor(dailyGoalNumber)
+  );
+}
+
+export function getDailyGoalProgress(focusedTimeMs, dailyGoalMinutes) {
+  const normalizedGoalMinutes = normalizeDailyGoalMinutes(dailyGoalMinutes);
+  const goalMs = normalizedGoalMinutes * 60_000;
+  const focusedMs = Math.max(0, Number(focusedTimeMs) || 0);
+  const progressPct = Math.round((focusedMs / goalMs) * 100);
+
+  return {
+    dailyGoalMinutes: normalizedGoalMinutes,
+    progressPct,
+    clampedProgressPct: Math.max(0, Math.min(progressPct, 100))
+  };
+}
+
 /**
  * Keep dailyStats entries within the recent local-date retention window.
  * Non-YYYY-MM-DD keys are dropped because dailyStats is keyed by calendar date.

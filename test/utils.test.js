@@ -7,8 +7,10 @@ import {
   formatMsAsClock,
   formatMsAsHoursMinutes,
   formatMsForTooltip,
+  getDailyGoalProgress,
   getYouTubePageType,
   msToDecimalHours,
+  normalizeDailyGoalMinutes,
   normalizeRetentionDays,
   pruneDailyStats
 } from "../utils.js";
@@ -130,6 +132,34 @@ test("normalizeRetentionDays keeps the default and clamps invalid values", () =>
   assert.equal(normalizeRetentionDays(30.8), 30);
   assert.equal(normalizeRetentionDays(0), 90);
   assert.equal(normalizeRetentionDays(-5), 90);
+});
+
+test("normalizeDailyGoalMinutes keeps the default and clamps invalid values", () => {
+  assert.equal(normalizeDailyGoalMinutes(undefined), 60);
+  assert.equal(normalizeDailyGoalMinutes(null), 60);
+  assert.equal(normalizeDailyGoalMinutes(""), 60);
+  assert.equal(normalizeDailyGoalMinutes("   "), 60);
+  assert.equal(normalizeDailyGoalMinutes(45.9), 45);
+  assert.equal(normalizeDailyGoalMinutes(0), 60);
+  assert.equal(normalizeDailyGoalMinutes(-5), 60);
+});
+
+test("getDailyGoalProgress calculates unclamped text and clamped bar progress", () => {
+  assert.deepEqual(getDailyGoalProgress(15 * 60_000, 60), {
+    dailyGoalMinutes: 60,
+    progressPct: 25,
+    clampedProgressPct: 25
+  });
+  assert.deepEqual(getDailyGoalProgress(75 * 60_000, 60), {
+    dailyGoalMinutes: 60,
+    progressPct: 125,
+    clampedProgressPct: 100
+  });
+  assert.deepEqual(getDailyGoalProgress(-1, 0), {
+    dailyGoalMinutes: 60,
+    progressPct: 0,
+    clampedProgressPct: 0
+  });
 });
 
 test("pruneDailyStats drops old and malformed date keys", () => {

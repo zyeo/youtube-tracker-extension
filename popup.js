@@ -3,6 +3,7 @@
 
 import {
   formatMsAsClock,
+  getDailyGoalProgress,
   getTodayDateString,
   getYesterdayDateString
 } from "./utils.js";
@@ -17,10 +18,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const browseTimeEl = document.getElementById("browseTime");
   const timeComparisonEl = document.getElementById("timeComparison");
   const opensComparisonEl = document.getElementById("opensComparison");
+  const goalProgressTextEl = document.getElementById("goalProgressText");
+  const goalProgressBarEl = document.getElementById("goalProgressBar");
   const openDashboardBtn = document.getElementById("openDashboard");
   const openOptionsBtn = document.getElementById("openOptions");
 
   const STORAGE_KEYS = {
+    dailyGoalMinutes: "dailyGoalMinutes",
     dailyStats: "dailyStats"
   };
   const SYNC_ACTIVE_SESSION_MESSAGE = "sync-active-session";
@@ -47,7 +51,19 @@ document.addEventListener("DOMContentLoaded", () => {
     return { text: `↓ ${decreasePct}% vs yesterday`, tone: "down" };
   }
 
-  function updateMetricsDisplay(dailyStatsObj) {
+  function updateGoalDisplay(focusedYouTubeTimeMs, storedGoalMinutes) {
+    if (!goalProgressTextEl || !goalProgressBarEl) {
+      return;
+    }
+
+    const { dailyGoalMinutes, progressPct, clampedProgressPct } =
+      getDailyGoalProgress(focusedYouTubeTimeMs, storedGoalMinutes);
+
+    goalProgressTextEl.textContent = `Goal: ${progressPct}% of ${dailyGoalMinutes} min`;
+    goalProgressBarEl.style.width = `${clampedProgressPct}%`;
+  }
+
+  function updateMetricsDisplay(dailyStatsObj, storedGoalMinutes) {
     const today = getTodayDateString();
     const yesterday = getYesterdayDateString();
     const todayStats = (dailyStatsObj && dailyStatsObj[today]) || {};
@@ -71,6 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
     shortsTimeEl.textContent = formatMsAsClock(shortsFocusedTimeMs);
     watchTimeEl.textContent = formatMsAsClock(watchFocusedTimeMs);
     browseTimeEl.textContent = formatMsAsClock(browseFocusedTimeMs);
+    updateGoalDisplay(focusedYouTubeTimeMs, storedGoalMinutes);
 
     if (timeComparisonEl) {
       const comparison = getVsYesterdayComparison(
@@ -95,9 +112,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function readAndRender() {
     chrome.storage.local.get(
-      [STORAGE_KEYS.dailyStats],
+      [STORAGE_KEYS.dailyGoalMinutes, STORAGE_KEYS.dailyStats],
       (data) => {
-        updateMetricsDisplay(data[STORAGE_KEYS.dailyStats]);
+        updateMetricsDisplay(
+          data[STORAGE_KEYS.dailyStats],
+          data[STORAGE_KEYS.dailyGoalMinutes]
+        );
       }
     );
   }
@@ -141,7 +161,10 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
     const changedKeys = Object.keys(changes || {});
-    if (changedKeys.includes(STORAGE_KEYS.dailyStats)) {
+    if (
+      changedKeys.includes(STORAGE_KEYS.dailyStats) ||
+      changedKeys.includes(STORAGE_KEYS.dailyGoalMinutes)
+    ) {
       readAndRender();
     }
   });

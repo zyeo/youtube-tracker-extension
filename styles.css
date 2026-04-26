@@ -97,6 +97,33 @@ body {
   margin-top: 4px;
 }
 
+.popup-goal {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popup-goal-text {
+  font-size: 12px;
+  color: #cbd5f5;
+}
+
+.popup-goal-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #1f2937;
+}
+
+.popup-goal-bar-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #2563eb;
+  transition: width 160ms ease-out;
+}
+
 /* ↑ = more usage than yesterday (worse) */
 .popup-comparison.is-up {
   color: #c45c52;
@@ -195,4 +222,41 @@ body {
   margin: 0;
   font-size: 13px;
   color: #cbd5f5;
+}
+
+.options-form {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.options-form label {
+  font-size: 13px;
+  color: #e5e7eb;
+}
+
+.options-form input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #f9fafb;
+}
+
+.options-form button {
+  justify-self: start;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #f9fafb;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.options-form button:hover {
+  background: #1d4ed8;
 }
