@@ -224,6 +224,12 @@ async function getFocusedActiveTab(tabHint, options = {}) {
     return null;
   }
 
+  if (options.useTabHintAsFocused && tabHint && tabHint.url) {
+    focusedWindowId = tabHint.windowId;
+    isChromeFocused = true;
+    return tabHint;
+  }
+
   const win = await windowsGetLastFocused();
   setFocusedWindowState(win);
 
@@ -340,6 +346,29 @@ function createTabHintFromRouteMessage(senderTab, url) {
   return {
     ...senderTab,
     url
+  };
+}
+
+function createTabHintFromPopupMessage(tabHint) {
+  if (
+    !tabHint ||
+    typeof tabHint.id !== "number" ||
+    typeof tabHint.windowId !== "number" ||
+    !tabHint.url
+  ) {
+    return null;
+  }
+
+  const pageType = getYouTubePageType(tabHint.url);
+  if (!pageType) {
+    return null;
+  }
+
+  return {
+    id: tabHint.id,
+    windowId: tabHint.windowId,
+    url: tabHint.url,
+    active: tabHint.active !== false
   };
 }
 
@@ -493,8 +522,11 @@ function enqueueActiveSessionSync(reason, tabHint, options) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === SYNC_ACTIVE_SESSION_MESSAGE) {
-    enqueueActiveSessionSync("popup requested active session sync").then(() => {
-      sendResponse({ ok: true });
+    const tabHint = createTabHintFromPopupMessage(message.tab);
+    enqueueActiveSessionSync("popup requested active session sync", tabHint, {
+      useTabHintAsFocused: Boolean(tabHint)
+    }).then(() => {
+      sendResponse({ ok: true, usedTabHint: Boolean(tabHint) });
     });
     return true;
   }

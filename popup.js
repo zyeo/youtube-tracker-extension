@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     dailyStats: "dailyStats"
   };
   const SYNC_ACTIVE_SESSION_MESSAGE = "sync-active-session";
+  let syncInProgress = false;
 
   function getVsYesterdayComparison(todayValue, yesterdayValue) {
     const today = Number(todayValue ?? 0);
@@ -101,18 +102,39 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function syncActiveSessionThenRender() {
-    chrome.runtime.sendMessage(
-      { type: SYNC_ACTIVE_SESSION_MESSAGE },
-      () => {
-        const ignoredError = chrome.runtime.lastError;
-        void ignoredError;
-        readAndRender();
-      }
-    );
+    if (syncInProgress) return;
+    syncInProgress = true;
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const ignoredQueryError = chrome.runtime.lastError;
+      void ignoredQueryError;
+
+      const activeTab = tabs && tabs.length ? tabs[0] : null;
+      chrome.runtime.sendMessage(
+        {
+          type: SYNC_ACTIVE_SESSION_MESSAGE,
+          tab: activeTab
+            ? {
+                id: activeTab.id,
+                windowId: activeTab.windowId,
+                url: activeTab.url,
+                active: activeTab.active
+              }
+            : null
+        },
+        () => {
+          const ignoredMessageError = chrome.runtime.lastError;
+          void ignoredMessageError;
+          syncInProgress = false;
+          readAndRender();
+        }
+      );
+    });
   }
 
   // Initial render.
   syncActiveSessionThenRender();
+  window.setInterval(syncActiveSessionThenRender, 1000);
 
   // Live update while the popup is open.
   chrome.storage.onChanged.addListener((changes, areaName) => {
