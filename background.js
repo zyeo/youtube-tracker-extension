@@ -127,6 +127,10 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Listen for when the active tab changes in a window.
 chrome.tabs.onActivated.addListener((activeInfo) => {
   chrome.tabs.get(activeInfo.tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab) {
+      return;
+    }
+
     logYouTubeTab(tab);
 
     const { isYouTube, pageType } = classifyTab(tab);
@@ -175,13 +179,27 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 
 function tabsQueryActiveInWindow(windowId) {
   return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, windowId }, (tabs) => resolve(tabs));
+    chrome.tabs.query({ active: true, windowId }, (tabs) => {
+      if (chrome.runtime.lastError) {
+        resolve([]);
+        return;
+      }
+
+      resolve(tabs);
+    });
   });
 }
 
 function windowsGetLastFocused() {
   return new Promise((resolve) => {
-    chrome.windows.getLastFocused((win) => resolve(win));
+    chrome.windows.getLastFocused((win) => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
+
+      resolve(win);
+    });
   });
 }
 
