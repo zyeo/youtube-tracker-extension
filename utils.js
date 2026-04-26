@@ -50,6 +50,13 @@ export function getYouTubePageType(url) {
   }
 }
 
+export function getYouTubePageTypeLabel(pageType) {
+  if (pageType === "shorts") return "Shorts";
+  if (pageType === "watch") return "Watch";
+  if (pageType === "browse") return "Browse";
+  return "";
+}
+
 /**
  * Format today's date as YYYY-MM-DD in local time.
  * @returns {string}
@@ -239,6 +246,21 @@ export function formatMsAsClock(ms) {
   const mm = String(minutesTotal % 60).padStart(2, "0");
   const ss = String(seconds).padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
+}
+
+export function getElapsedSessionMs(startedAt, now = Date.now()) {
+  if (startedAt === null || startedAt === undefined) {
+    return 0;
+  }
+
+  const startedAtNumber = Number(startedAt);
+  const nowNumber = Number(now);
+
+  if (!Number.isFinite(startedAtNumber) || !Number.isFinite(nowNumber)) {
+    return 0;
+  }
+
+  return Math.max(0, nowNumber - startedAtNumber);
 }
 
 export function msToDecimalHours(ms) {

@@ -9,6 +9,13 @@
     <div class="popup-container">
       <h1 class="popup-title">YouTube Tracker</h1>
       <section class="popup-main-metric">
+        <div class="popup-live-status" aria-live="polite">
+          <div class="popup-live-status-row">
+            <span id="trackingState" class="popup-status-badge">Not tracking</span>
+            <span id="pageType" class="popup-live-page-type"></span>
+          </div>
+          <div id="sessionFocusedTime" class="popup-live-session-time">Session 00:00</div>
+        </div>
         <p class="popup-text">YouTube time today</p>
         <div id="focusedTime" class="popup-total-time popup-count-time">00:00</div>
         <div id="timeComparison" class="popup-comparison">No change vs yesterday</div>

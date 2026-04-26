@@ -391,6 +391,16 @@ function createActiveSession(tab, pageType, now) {
   };
 }
 
+function createLiveStatus(activeTab, nextSession) {
+  const { pageType } = classifyTab(activeTab);
+
+  return {
+    isTracking: Boolean(nextSession),
+    pageType,
+    startedAt: nextSession ? nextSession.startedAt : null
+  };
+}
+
 function shouldContinueSession(activeSession, nextSession, ignoredStaleGapMs) {
   return Boolean(
     activeSession &&
@@ -503,7 +513,7 @@ async function syncActiveSession(reason, tabHint, options = {}) {
     }
 
     await storageSet(itemsToSet);
-    return;
+    return createLiveStatus(activeTab, null);
   }
 
   if (shouldContinueSession(activeSession, nextSession, ignoredStaleGapMs)) {
@@ -528,6 +538,8 @@ async function syncActiveSession(reason, tabHint, options = {}) {
     previousSession: activeSession,
     nextSession
   });
+
+  return createLiveStatus(activeTab, nextSession);
 }
 
 function enqueueActiveSessionSync(reason, tabHint, options) {
@@ -539,8 +551,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabHint = createTabHintFromPopupMessage(message.tab);
     enqueueActiveSessionSync("popup requested active session sync", tabHint, {
       useTabHintAsFocused: Boolean(tabHint)
-    }).then(() => {
-      sendResponse({ ok: true, usedTabHint: Boolean(tabHint) });
+    }).then((liveStatus) => {
+      sendResponse({ ok: true, usedTabHint: Boolean(tabHint), liveStatus });
     });
     return true;
   }

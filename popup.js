@@ -4,7 +4,9 @@
 import {
   formatMsAsClock,
   getDailyGoalProgress,
+  getElapsedSessionMs,
   getTodayDateString,
+  getYouTubePageTypeLabel,
   getYesterdayDateString
 } from "./utils.js";
 
@@ -20,6 +22,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const opensComparisonEl = document.getElementById("opensComparison");
   const goalProgressTextEl = document.getElementById("goalProgressText");
   const goalProgressBarEl = document.getElementById("goalProgressBar");
+  const trackingStateEl = document.getElementById("trackingState");
+  const pageTypeEl = document.getElementById("pageType");
+  const sessionFocusedTimeEl = document.getElementById("sessionFocusedTime");
   const openDashboardBtn = document.getElementById("openDashboard");
   const openOptionsBtn = document.getElementById("openOptions");
 
@@ -29,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   const SYNC_ACTIVE_SESSION_MESSAGE = "sync-active-session";
   let syncInProgress = false;
+  let latestLiveStatus = null;
 
   function getVsYesterdayComparison(todayValue, yesterdayValue) {
     const today = Number(todayValue ?? 0);
@@ -110,6 +116,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function updateLiveStatusDisplay(liveStatus) {
+    if (!trackingStateEl || !pageTypeEl || !sessionFocusedTimeEl) {
+      return;
+    }
+
+    const isTracking = Boolean(liveStatus && liveStatus.isTracking);
+    const pageTypeLabel = getYouTubePageTypeLabel(liveStatus && liveStatus.pageType);
+    const sessionElapsedMs = getElapsedSessionMs(liveStatus && liveStatus.startedAt);
+
+    trackingStateEl.textContent = isTracking ? "Tracking now" : "Not tracking";
+    trackingStateEl.classList.remove("is-tracking", "is-idle");
+    trackingStateEl.classList.add(isTracking ? "is-tracking" : "is-idle");
+
+    pageTypeEl.textContent = pageTypeLabel ? `${pageTypeLabel} page` : "";
+    sessionFocusedTimeEl.textContent = `Session ${formatMsAsClock(sessionElapsedMs)}`;
+  }
+
   function readAndRender() {
     chrome.storage.local.get(
       [STORAGE_KEYS.dailyGoalMinutes, STORAGE_KEYS.dailyStats],
@@ -118,6 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
           data[STORAGE_KEYS.dailyStats],
           data[STORAGE_KEYS.dailyGoalMinutes]
         );
+        updateLiveStatusDisplay(latestLiveStatus);
       }
     );
   }
@@ -143,9 +167,11 @@ document.addEventListener("DOMContentLoaded", () => {
               }
             : null
         },
-        () => {
+        (response) => {
           const ignoredMessageError = chrome.runtime.lastError;
           void ignoredMessageError;
+          latestLiveStatus = response && response.liveStatus ? response.liveStatus : null;
+          updateLiveStatusDisplay(latestLiveStatus);
           syncInProgress = false;
           readAndRender();
         }

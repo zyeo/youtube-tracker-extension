@@ -8,7 +8,9 @@ import {
   formatMsAsHoursMinutes,
   formatMsForTooltip,
   getDailyGoalProgress,
+  getElapsedSessionMs,
   getYouTubePageType,
+  getYouTubePageTypeLabel,
   msToDecimalHours,
   normalizeDailyGoalMinutes,
   normalizeRetentionDays,
@@ -28,6 +30,13 @@ test("getYouTubePageType rejects unsupported hosts and invalid URLs", () => {
   assert.equal(getYouTubePageType("not a url"), null);
   assert.equal(getYouTubePageType(""), null);
   assert.equal(getYouTubePageType(null), null);
+});
+
+test("getYouTubePageTypeLabel formats popup-friendly labels", () => {
+  assert.equal(getYouTubePageTypeLabel("shorts"), "Shorts");
+  assert.equal(getYouTubePageTypeLabel("watch"), "Watch");
+  assert.equal(getYouTubePageTypeLabel("browse"), "Browse");
+  assert.equal(getYouTubePageTypeLabel(null), "");
 });
 
 test("formatDateString formats local calendar dates as yyyy-mm-dd", () => {
@@ -213,6 +222,12 @@ test("formatMsAsClock formats durations below and above an hour", () => {
   assert.equal(formatMsAsClock(3_600_000), "01:00:00");
   assert.equal(formatMsAsClock(3_661_000), "01:01:01");
   assert.equal(formatMsAsClock(null), "00:00");
+});
+
+test("getElapsedSessionMs clamps invalid and past-now values", () => {
+  assert.equal(getElapsedSessionMs(1_000, 5_000), 4_000);
+  assert.equal(getElapsedSessionMs(5_000, 1_000), 0);
+  assert.equal(getElapsedSessionMs(null, 1_000), 0);
 });
 
 test("msToDecimalHours rounds to two decimal places", () => {
