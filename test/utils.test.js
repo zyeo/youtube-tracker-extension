@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyFocusedYouTubeSessionToDailyStats,
   formatDateString,
   formatMsAsClock,
   formatMsAsHoursMinutes,
@@ -28,6 +29,86 @@ test("getYouTubePageType rejects unsupported hosts and invalid URLs", () => {
 test("formatDateString formats local calendar dates as yyyy-mm-dd", () => {
   assert.equal(formatDateString(new Date(2026, 0, 2)), "2026-01-02");
   assert.equal(formatDateString(new Date(2026, 10, 12)), "2026-11-12");
+});
+
+test("applyFocusedYouTubeSessionToDailyStats adds elapsed time to matching bucket", () => {
+  const dailyStats = {
+    "2026-04-26": {
+      youtubeOpenCount: 2,
+      activeYouTubeTimeMs: 1_000,
+      shortsFocusedTimeMs: 0,
+      watchFocusedTimeMs: 1_000,
+      browseFocusedTimeMs: 0
+    }
+  };
+
+  const nextDailyStats = applyFocusedYouTubeSessionToDailyStats(dailyStats, {
+    startedAt: new Date(2026, 3, 26, 10, 0, 0).getTime(),
+    endedAt: new Date(2026, 3, 26, 10, 0, 5).getTime(),
+    pageType: "shorts"
+  });
+
+  assert.notEqual(nextDailyStats, dailyStats);
+  assert.deepEqual(dailyStats["2026-04-26"], {
+    youtubeOpenCount: 2,
+    activeYouTubeTimeMs: 1_000,
+    shortsFocusedTimeMs: 0,
+    watchFocusedTimeMs: 1_000,
+    browseFocusedTimeMs: 0
+  });
+  assert.deepEqual(nextDailyStats["2026-04-26"], {
+    youtubeOpenCount: 2,
+    activeYouTubeTimeMs: 6_000,
+    shortsFocusedTimeMs: 5_000,
+    watchFocusedTimeMs: 1_000,
+    browseFocusedTimeMs: 0
+  });
+});
+
+test("applyFocusedYouTubeSessionToDailyStats initializes missing fields", () => {
+  const nextDailyStats = applyFocusedYouTubeSessionToDailyStats(
+    {
+      "2026-04-26": {
+        youtubeOpenCount: 1
+      }
+    },
+    {
+      startedAt: new Date(2026, 3, 26, 10, 0, 0).getTime(),
+      endedAt: new Date(2026, 3, 26, 10, 0, 3).getTime(),
+      pageType: "watch"
+    }
+  );
+
+  assert.deepEqual(nextDailyStats["2026-04-26"], {
+    youtubeOpenCount: 1,
+    activeYouTubeTimeMs: 3_000,
+    shortsFocusedTimeMs: 0,
+    watchFocusedTimeMs: 3_000,
+    browseFocusedTimeMs: 0
+  });
+});
+
+test("applyFocusedYouTubeSessionToDailyStats splits sessions across local dates", () => {
+  const nextDailyStats = applyFocusedYouTubeSessionToDailyStats({}, {
+    startedAt: new Date(2026, 3, 26, 23, 59, 58).getTime(),
+    endedAt: new Date(2026, 3, 27, 0, 0, 2).getTime(),
+    pageType: "browse"
+  });
+
+  assert.deepEqual(nextDailyStats["2026-04-26"], {
+    youtubeOpenCount: 0,
+    activeYouTubeTimeMs: 2_000,
+    shortsFocusedTimeMs: 0,
+    watchFocusedTimeMs: 0,
+    browseFocusedTimeMs: 2_000
+  });
+  assert.deepEqual(nextDailyStats["2026-04-27"], {
+    youtubeOpenCount: 0,
+    activeYouTubeTimeMs: 2_000,
+    shortsFocusedTimeMs: 0,
+    watchFocusedTimeMs: 0,
+    browseFocusedTimeMs: 2_000
+  });
 });
 
 test("formatMsAsClock formats durations below and above an hour", () => {
