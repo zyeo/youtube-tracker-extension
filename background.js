@@ -4,6 +4,7 @@
 import {
   applyFocusedYouTubeSessionToDailyStats,
   createSessionHistoryRecord,
+  getCountableElapsedTimeMs,
   getDailyGoalNotificationDates,
   getOpenCountTransitionUpdate,
   getTodayDateString,
@@ -26,8 +27,9 @@ const STORAGE_KEYS = {
 };
 const ACTIVE_SESSION_ALARM_NAME = "active-session-commit";
 const ACTIVE_SESSION_ALARM_PERIOD_MINUTES = 1;
-const STALE_SESSION_GAP_MS = 5 * 60 * 1000;
+const IDLE_CUTOFF_MS = 30 * 1000;
 const YOUTUBE_ROUTE_CHANGED_MESSAGE = "youtube-route-changed";
+const YOUTUBE_ENGAGEMENT_CHANGED_MESSAGE = "youtube-engagement-changed";
 const SYNC_ACTIVE_SESSION_MESSAGE = "sync-active-session";
 const NOTIFICATION_ICON_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+tm0YAAAAASUVORK5CYII=";
@@ -101,6 +103,7 @@ function logYouTubeTab(tab) {
 // Do NOT count switching between two YouTube tabs.
 const lastActiveIsYouTubeByWindowId = new Map(); // windowId -> boolean
 const isYouTubeByTabId = new Map(); // tabId -> boolean (best-effort, updated on tab updates)
+const engagementStateByTabId = new Map(); // tabId -> video playback state
 
 /**
  * Returns whether a tab is a YouTube page (any YouTube page type).
@@ -385,6 +388,39 @@ function createTabHintFromPopupMessage(tabHint) {
   };
 }
 
+function getEngagementState(tabId) {
+  return typeof tabId === "number" ? engagementStateByTabId.get(tabId) : null;
+}
+
+function createEngagementUpdateFromMessage(senderTab, message) {
+  if (!senderTab || typeof senderTab.id !== "number") {
+    return null;
+  }
+
+  const pageType = getYouTubePageType(message && message.url);
+  if (!pageType) {
+    return {
+      tabId: senderTab.id,
+      tabHint: null,
+      engagementState: null
+    };
+  }
+
+  return {
+    tabId: senderTab.id,
+    tabHint: {
+      ...senderTab,
+      url: message.url
+    },
+    engagementState: {
+      url: message.url,
+      isVideoPlaying: Boolean(message.isVideoPlaying),
+      hasVideo: Boolean(message.hasVideo),
+      updatedAt: Date.now()
+    }
+  };
+}
+
 function createActiveSession(tab, pageType, now) {
   return {
     tabId: tab.id,
@@ -392,17 +428,49 @@ function createActiveSession(tab, pageType, now) {
     url: tab.url,
     pageType,
     startedAt: now,
-    lastCommittedAt: now
+    lastCommittedAt: now,
+    activeElapsedMs: 0
   };
 }
 
 function createLiveStatus(activeTab, nextSession) {
   const { pageType } = classifyTab(activeTab);
+  const engagementState = activeTab ? getEngagementState(activeTab.id) : null;
+  const now = Date.now();
+  const committedActiveElapsedMs = Math.max(
+    0,
+    Number(nextSession && nextSession.activeElapsedMs) || 0
+  );
+  const lastCommittedAt = Number(
+    nextSession && (nextSession.lastCommittedAt ?? nextSession.startedAt)
+  );
+  const liveElapsedMs = nextSession && Number.isFinite(lastCommittedAt)
+    ? getCountableElapsedTimeMs({
+        pageType,
+        startedAt: lastCommittedAt,
+        endedAt: now,
+        sessionStartedAt: nextSession.startedAt,
+        isVideoPlaying: engagementState && engagementState.isVideoPlaying,
+        idleCutoffMs: IDLE_CUTOFF_MS
+      })
+    : 0;
+  const activeElapsedMs = committedActiveElapsedMs + liveElapsedMs;
+  const isEngaged = nextSession && Number.isFinite(lastCommittedAt)
+    ? getCountableElapsedTimeMs({
+        pageType,
+        startedAt: now - 1,
+        endedAt: now,
+        sessionStartedAt: nextSession.startedAt,
+        isVideoPlaying: engagementState && engagementState.isVideoPlaying,
+        idleCutoffMs: IDLE_CUTOFF_MS
+      }) > 0
+    : false;
 
   return {
     isTracking: Boolean(nextSession),
     pageType,
-    startedAt: nextSession ? nextSession.startedAt : null
+    activeElapsedMs,
+    isEngaged
   };
 }
 
@@ -413,7 +481,6 @@ function shouldContinueSession(activeSession, nextSession, ignoredStaleGapMs) {
       !ignoredStaleGapMs &&
       activeSession.tabId === nextSession.tabId &&
       activeSession.windowId === nextSession.windowId &&
-      activeSession.url === nextSession.url &&
       activeSession.pageType === nextSession.pageType
   );
 }
@@ -457,6 +524,7 @@ async function commitStoredActiveSession(now) {
       sessionHistory,
       activeSession: null,
       committedElapsedMs: 0,
+      committedThroughAt: null,
       ignoredStaleGapMs: 0,
       dailyGoalNotifications,
       dailyGoalNotificationDates: []
@@ -474,35 +542,41 @@ async function commitStoredActiveSession(now) {
       sessionHistory,
       activeSession,
       committedElapsedMs: 0,
+      activeElapsedMs: Math.max(
+        0,
+        Number(activeSession && activeSession.activeElapsedMs) || 0
+      ),
+      committedThroughAt: lastCommittedAt,
       ignoredStaleGapMs: 0,
       dailyGoalNotifications,
       dailyGoalNotificationDates: []
     };
   }
 
-  const elapsedMs = now - lastCommittedAt;
+  const engagementState = getEngagementState(activeSession.tabId);
+  const countableElapsedMs = getCountableElapsedTimeMs({
+    pageType: activeSession.pageType,
+    startedAt: lastCommittedAt,
+    endedAt: now,
+    sessionStartedAt: activeSession.startedAt,
+    isVideoPlaying: engagementState && engagementState.isVideoPlaying,
+    idleCutoffMs: IDLE_CUTOFF_MS
+  });
+  const committedThroughAt = lastCommittedAt + countableElapsedMs;
+  const activeElapsedMs =
+    Math.max(0, Number(activeSession.activeElapsedMs) || 0) +
+    countableElapsedMs;
 
-  if (elapsedMs > STALE_SESSION_GAP_MS) {
-    return {
-      dailyStats,
-      activeState,
-      sessionHistory,
-      activeSession,
-      committedElapsedMs: 0,
-      ignoredStaleGapMs: elapsedMs,
-      dailyGoalNotifications,
-      dailyGoalNotificationDates: []
-    };
-  }
-
-  const nextDailyStats = applyFocusedYouTubeSessionToDailyStats(
-    dailyStats,
-    {
-      ...activeSession,
-      startedAt: lastCommittedAt,
-      endedAt: now
-    }
-  );
+  const nextDailyStats = countableElapsedMs > 0
+    ? applyFocusedYouTubeSessionToDailyStats(
+        dailyStats,
+        {
+          ...activeSession,
+          startedAt: lastCommittedAt,
+          endedAt: committedThroughAt
+        }
+      )
+    : dailyStats;
   const dailyGoalNotificationDates = getDailyGoalNotificationDates(
     dailyStats,
     nextDailyStats,
@@ -519,7 +593,9 @@ async function commitStoredActiveSession(now) {
     activeState,
     sessionHistory,
     activeSession,
-    committedElapsedMs: elapsedMs,
+    committedElapsedMs: countableElapsedMs,
+    activeElapsedMs,
+    committedThroughAt,
     ignoredStaleGapMs: 0,
     dailyGoalNotifications,
     dailyGoalNotificationDates,
@@ -541,6 +617,8 @@ async function syncActiveSession(reason, tabHint, options = {}) {
     sessionHistory,
     activeSession,
     committedElapsedMs,
+    activeElapsedMs,
+    committedThroughAt,
     ignoredStaleGapMs,
     dailyGoalNotifications,
     dailyGoalNotificationDates,
@@ -560,7 +638,7 @@ async function syncActiveSession(reason, tabHint, options = {}) {
   if (activeSession && !continueSession) {
     const completedSessionEndedAt = ignoredStaleGapMs
       ? Number(activeSession.lastCommittedAt ?? activeSession.startedAt)
-      : now;
+      : Number(committedThroughAt ?? now);
     const completedSessionRecord = createSessionHistoryRecord(
       activeSession,
       completedSessionEndedAt
@@ -588,6 +666,7 @@ async function syncActiveSession(reason, tabHint, options = {}) {
 
   if (continueSession) {
     nextSession.startedAt = activeSession.startedAt;
+    nextSession.activeElapsedMs = activeElapsedMs;
   }
 
   const itemsToSet = {
@@ -643,6 +722,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message && message.type === YOUTUBE_ENGAGEMENT_CHANGED_MESSAGE) {
+    const engagementUpdate = createEngagementUpdateFromMessage(
+      sender && sender.tab,
+      message
+    );
+    if (engagementUpdate) {
+      enqueueStorageOperation(async () => {
+        if (engagementUpdate.tabHint) {
+          await syncActiveSession(
+            "before YouTube engagement changed",
+            engagementUpdate.tabHint
+          );
+        }
+
+        if (engagementUpdate.engagementState) {
+          engagementStateByTabId.set(
+            engagementUpdate.tabId,
+            engagementUpdate.engagementState
+          );
+        } else {
+          engagementStateByTabId.delete(engagementUpdate.tabId);
+        }
+
+        if (engagementUpdate.tabHint) {
+          await syncActiveSession(
+            "YouTube engagement changed",
+            engagementUpdate.tabHint
+          );
+        }
+      });
+    }
+    return;
+  }
+
   if (!message || message.type !== YOUTUBE_ROUTE_CHANGED_MESSAGE) {
     return;
   }
@@ -666,6 +779,7 @@ function startActiveSessionAlarm() {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   isYouTubeByTabId.delete(tabId);
+  engagementStateByTabId.delete(tabId);
   enqueueActiveSessionSync("tab removed");
 });
 

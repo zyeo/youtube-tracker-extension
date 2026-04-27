@@ -462,6 +462,60 @@ export function getElapsedSessionMs(startedAt, now = Date.now()) {
   return Math.max(0, nowNumber - startedAtNumber);
 }
 
+/**
+ * Return the portion of an interval that should count toward focused time.
+ * Browse pages count only during the initial idle cutoff window. Watch/shorts
+ * pages count only while video is playing.
+ * @param {{
+ *   pageType: "shorts"|"watch"|"browse",
+ *   startedAt: number,
+ *   endedAt: number,
+ *   sessionStartedAt: number,
+ *   isVideoPlaying: boolean,
+ *   idleCutoffMs: number
+ * }} options
+ * @returns {number}
+ */
+export function getCountableElapsedTimeMs({
+  pageType,
+  startedAt,
+  endedAt,
+  sessionStartedAt,
+  isVideoPlaying,
+  idleCutoffMs
+}) {
+  const startedAtNumber = Number(startedAt);
+  const endedAtNumber = Number(endedAt);
+  const sessionStartedAtNumber = Number(sessionStartedAt);
+  const idleCutoffNumber = Number(idleCutoffMs);
+
+  if (
+    !Number.isFinite(startedAtNumber) ||
+    !Number.isFinite(endedAtNumber) ||
+    !Number.isFinite(sessionStartedAtNumber) ||
+    !Number.isFinite(idleCutoffNumber) ||
+    endedAtNumber <= startedAtNumber ||
+    idleCutoffNumber < 0 ||
+    !isValidSessionPageType(pageType)
+  ) {
+    return 0;
+  }
+
+  if (
+    (pageType === "watch" || pageType === "shorts") &&
+    Boolean(isVideoPlaying)
+  ) {
+    return endedAtNumber - startedAtNumber;
+  }
+
+  if (pageType !== "browse") {
+    return 0;
+  }
+
+  const cutoffAt = sessionStartedAtNumber + idleCutoffNumber;
+  return Math.max(0, Math.min(endedAtNumber, cutoffAt) - startedAtNumber);
+}
+
 export function msToDecimalHours(ms) {
   return Math.round((Number(ms ?? 0) / 3600000) * 100) / 100;
 }

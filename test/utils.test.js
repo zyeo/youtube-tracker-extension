@@ -10,6 +10,7 @@ import {
   formatMsForTooltip,
   getDailyGoalProgress,
   getDailyGoalNotificationDates,
+  getCountableElapsedTimeMs,
   getElapsedSessionMs,
   getOpenCountTransitionUpdate,
   getYouTubePageType,
@@ -528,6 +529,126 @@ test("getElapsedSessionMs clamps invalid and past-now values", () => {
   assert.equal(getElapsedSessionMs(1_000, 5_000), 4_000);
   assert.equal(getElapsedSessionMs(5_000, 1_000), 0);
   assert.equal(getElapsedSessionMs(null, 1_000), 0);
+});
+
+test("getCountableElapsedTimeMs counts browse intervals before the cutoff", () => {
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "browse",
+      startedAt: 1_000,
+      endedAt: 21_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: false,
+      idleCutoffMs: 30_000
+    }),
+    20_000
+  );
+});
+
+test("getCountableElapsedTimeMs stops browse intervals after the cutoff", () => {
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "browse",
+      startedAt: 31_000,
+      endedAt: 61_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: false,
+      idleCutoffMs: 30_000
+    }),
+    0
+  );
+});
+
+test("getCountableElapsedTimeMs does not count paused watch intervals", () => {
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "watch",
+      startedAt: 1_000,
+      endedAt: 31_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: false,
+      idleCutoffMs: 30_000
+    }),
+    0
+  );
+});
+
+test("getCountableElapsedTimeMs keeps playing watch intervals counting", () => {
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "watch",
+      startedAt: 6 * 60_000,
+      endedAt: 7 * 60_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: true,
+      idleCutoffMs: 5 * 60_000
+    }),
+    60_000
+  );
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "shorts",
+      startedAt: 6 * 60_000,
+      endedAt: 7 * 60_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: true,
+      idleCutoffMs: 5 * 60_000
+    }),
+    60_000
+  );
+});
+
+test("getCountableElapsedTimeMs only counts through the idle cutoff when interval crosses it", () => {
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "browse",
+      startedAt: 20_000,
+      endedAt: 40_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: false,
+      idleCutoffMs: 30_000
+    }),
+    10_000
+  );
+});
+
+test("getCountableElapsedTimeMs reports no live browse time after the cutoff", () => {
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "browse",
+      startedAt: 0,
+      endedAt: 31_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: false,
+      idleCutoffMs: 30_000
+    }),
+    30_000
+  );
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "browse",
+      startedAt: 31_000,
+      endedAt: 32_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: false,
+      idleCutoffMs: 30_000
+    }),
+    0
+  );
+});
+
+test("getCountableElapsedTimeMs returns 0 for invalid intervals", () => {
+  assert.equal(
+    getCountableElapsedTimeMs({
+      pageType: "browse",
+      startedAt: 5_000,
+      endedAt: 1_000,
+      sessionStartedAt: 0,
+      isVideoPlaying: false,
+      idleCutoffMs: 5 * 60_000
+    }),
+    0
+  );
 });
 
 test("msToDecimalHours rounds to two decimal places", () => {
