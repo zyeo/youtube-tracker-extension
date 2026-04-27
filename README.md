@@ -5,6 +5,7 @@ YouTube Tracker is a Chrome extension that measures focused time spent on YouTub
 ## What it does
 
 - Tracks focused YouTube time only when the active tab is a YouTube page in the focused Chrome window
+- Stops counting YouTube browse pages after 30 seconds and paused watch pages immediately
 - Categorizes time by page type such as watch pages, Shorts, and general browsing
 - Stores daily stats and compact recent session history in `chrome.storage.local`
 - Shows live status in the popup, including today's focused time and daily goal progress
@@ -85,15 +86,18 @@ Use this checklist with the unpacked extension loaded in Chrome:
 1. Open a normal YouTube watch page, keep that tab active in the focused Chrome window for a few minutes, and confirm the popup time increases.
 2. Switch between a watch page, Shorts, and a general YouTube browsing page, then confirm the dashboard reflects page-type breakdowns.
 3. Change focus away from Chrome or switch to a non-YouTube tab, wait briefly, and confirm tracked focused time stops increasing.
-4. Open the options page, change daily goal minutes and retention days, reload the popup, and confirm the updated goal appears.
-5. Set a very small daily goal, exceed it on YouTube, and confirm a notification appears only once for that day.
-6. Open the dashboard and confirm charts render and recent session entries appear after tracked activity.
-7. Reload the extension from `chrome://extensions/`, then confirm previously stored local stats still appear.
+4. Leave a YouTube browse page open for more than 30 seconds and confirm tracked focused time stops increasing.
+5. Pause a YouTube watch page and confirm tracked focused time stops increasing.
+6. Play a YouTube watch page without interacting and confirm tracked focused time continues increasing while the video plays.
+7. Open the options page, change daily goal minutes and retention days, reload the popup, and confirm the updated goal appears.
+8. Set a very small daily goal, exceed it on YouTube, and confirm a notification appears only once for that day.
+9. Open the dashboard and confirm charts render and recent session entries appear after tracked activity.
+10. Reload the extension from `chrome://extensions/`, then confirm previously stored local stats still appear.
 
 ## Known limitations
 
 - Chrome only; this repository is structured as a Chrome extension, not a cross-browser package
 - Tracking is limited to `youtube.com`, `www.youtube.com`, and `m.youtube.com`
-- Tracking depends on active tab and focused window signals, so some edge cases around rapid tab/window changes may be approximate
+- Tracking depends on active tab, focused window, page type, and YouTube video signals, so some edge cases around rapid tab/window changes may be approximate
 - Data is local only; there is no sync, backup, multi-device merge, or export
 - Existing automated coverage is limited to Node-based tests and does not cover full browser integration behavior

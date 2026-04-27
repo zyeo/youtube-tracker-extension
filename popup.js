@@ -4,7 +4,6 @@
 import {
   formatMsAsClock,
   getDailyGoalProgress,
-  getElapsedSessionMs,
   getTodayDateString,
   getYouTubePageTypeLabel,
   getYesterdayDateString
@@ -122,15 +121,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const isTracking = Boolean(liveStatus && liveStatus.isTracking);
+    const isEngaged = Boolean(liveStatus && liveStatus.isEngaged);
     const pageTypeLabel = getYouTubePageTypeLabel(liveStatus && liveStatus.pageType);
-    const sessionElapsedMs = getElapsedSessionMs(liveStatus && liveStatus.startedAt);
+    const activeElapsedMs = Number(liveStatus && liveStatus.activeElapsedMs);
 
-    trackingStateEl.textContent = isTracking ? "Tracking now" : "Not tracking";
+    trackingStateEl.textContent = isTracking && isEngaged
+      ? "Tracking now"
+      : isTracking
+        ? "Idle"
+        : "Not tracking";
     trackingStateEl.classList.remove("is-tracking", "is-idle");
-    trackingStateEl.classList.add(isTracking ? "is-tracking" : "is-idle");
+    trackingStateEl.classList.add(
+      isTracking && isEngaged ? "is-tracking" : "is-idle"
+    );
 
     pageTypeEl.textContent = pageTypeLabel ? `${pageTypeLabel} page` : "";
-    sessionFocusedTimeEl.textContent = `Session ${formatMsAsClock(sessionElapsedMs)}`;
+    sessionFocusedTimeEl.textContent = `Active now ${formatMsAsClock(
+      Number.isFinite(activeElapsedMs) ? activeElapsedMs : 0
+    )}`;
   }
 
   function readAndRender() {
